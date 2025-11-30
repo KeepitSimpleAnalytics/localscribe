@@ -58,6 +58,8 @@ internal static class NativeMethods
 
     public static void SendKeystroke(Keys key, bool ctrl = false, bool alt = false, bool shift = false)
     {
+        ReleaseModifiers(); // Ensure no stray modifiers from the hotkey are active
+
         var inputs = new System.Collections.Generic.List<INPUT>();
 
         void AddKey(ushort vk, bool keyUp)
@@ -94,4 +96,33 @@ internal static class NativeMethods
     public static void SendCopyShortcut() => SendKeystroke(Keys.C, ctrl: true);
 
     public static void SendPasteShortcut() => SendKeystroke(Keys.V, ctrl: true);
+
+    public static void ReleaseModifiers()
+    {
+        var inputs = new System.Collections.Generic.List<INPUT>();
+
+        void AddKeyUp(ushort vk)
+        {
+            inputs.Add(new INPUT
+            {
+                type = 1,
+                U = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = vk,
+                        dwFlags = KEYEVENTF_KEYUP
+                    }
+                }
+            });
+        }
+
+        AddKeyUp((ushort)Keys.Menu);       // Alt
+        AddKeyUp((ushort)Keys.ControlKey); // Ctrl
+        AddKeyUp((ushort)Keys.ShiftKey);   // Shift
+        AddKeyUp((ushort)Keys.LWin);       // Win
+
+        SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+        Thread.Sleep(50);
+    }
 }

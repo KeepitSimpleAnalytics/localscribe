@@ -15,7 +15,7 @@ public sealed class ClipboardService
         string? backup = GetCurrentClipboardText();
 
         NativeMethods.SendCopyShortcut();
-        await Task.Delay(150);
+        await Task.Delay(250);
 
         string captured = WpfClipboard.ContainsText() ? WpfClipboard.GetText() : string.Empty;
 
