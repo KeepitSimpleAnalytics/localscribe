@@ -22,14 +22,14 @@ namespace GramCloneClient.Windows
 
             if (errorCount == 0)
             {
-                // Green / Good
-                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(76, 175, 80)); // Green
+                // Green / Good (Semi-transparent)
+                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 76, 175, 80)); 
                 CountText.Text = "✓";
             }
             else
             {
-                // Red / Error
-                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(244, 67, 54)); // Red
+                // Red / Error (Semi-transparent)
+                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 244, 67, 54)); 
                 CountText.Text = errorCount.ToString();
                 this.Show();
             }
@@ -43,13 +43,15 @@ namespace GramCloneClient.Windows
 
         public void UpdatePosition(Rect targetRect)
         {
-            // Position the bubble to the right of the target element
+            // Position the bubble slightly above and to the right of the cursor
             // targetRect is in screen coordinates
             
             if (targetRect == Rect.Empty) return;
 
-            double targetX = targetRect.Right + 10; // 10px padding
-            double targetY = targetRect.Top;
+            // Move 5px right and shift UP by the bubble height + 2px padding
+            // This places it "above" the line you are typing on.
+            double targetX = targetRect.Right + 5; 
+            double targetY = targetRect.Top - this.Height - 2;
 
             // Ensure it stays on screen (basic check)
             double screenWidth = SystemParameters.PrimaryScreenWidth;
@@ -57,12 +59,13 @@ namespace GramCloneClient.Windows
 
             if (targetX + this.Width > screenWidth)
             {
-                targetX = targetRect.Left - this.Width - 10; // Flip to left if offscreen
+                targetX = targetRect.Left - this.Width - 5; // Flip to left if offscreen
             }
             
-            if (targetY + this.Height > screenHeight)
+            // If it goes off the top, flip it to below
+            if (targetY < 0)
             {
-                 targetY = screenHeight - this.Height;
+                 targetY = targetRect.Bottom + 2;
             }
 
             this.Left = targetX;

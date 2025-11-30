@@ -1,18 +1,18 @@
 <Window x:Class="GramCloneClient.Windows.BubbleWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GramClone Bubble" Height="40" Width="40"
+        Title="GramClone Bubble" Height="26" Width="26"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" Focusable="False">
     <Grid>
-        <Border Name="BubbleBorder" CornerRadius="20" Background="#FF4CAF50" BorderBrush="White" BorderThickness="2"
-                MouseLeftButtonDown="BubbleBorder_MouseLeftButtonDown" Cursor="Hand">
+        <Border Name="BubbleBorder" CornerRadius="13" Background="#B24CAF50" BorderBrush="White" BorderThickness="1"
+                MouseLeftButtonDown="BubbleBorder_MouseLeftButtonDown" Cursor="Hand" Opacity="0.8">
             <Border.Effect>
-                <DropShadowEffect BlurRadius="5" ShadowDepth="2" Opacity="0.5"/>
+                <DropShadowEffect BlurRadius="3" ShadowDepth="1" Opacity="0.3"/>
             </Border.Effect>
             <TextBlock Name="CountText" Text="✓" HorizontalAlignment="Center" VerticalAlignment="Center" 
-                       Foreground="White" FontWeight="Bold" FontSize="16"/>
+                       Foreground="White" FontWeight="Bold" FontSize="12"/>
         </Border>
 
         <Popup Name="ErrorPopup" PlacementTarget="{Binding ElementName=BubbleBorder}" 
