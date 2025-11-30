@@ -136,7 +136,8 @@ namespace GramCloneClient.Services
             _lastObservedText = string.Empty; // Reset for new focus
             _lastBounds = Rect.Empty;
             _lastCaretBounds = Rect.Empty;
-        }   _lastBounds = Rect.Empty;
+        }
+
         private (string Text, Rect ElementBounds, Rect CaretBounds) ReadTextAndBounds(AutomationElement element)
         {
             string text = string.Empty;
@@ -177,8 +178,6 @@ namespace GramCloneClient.Services
                 Logger.Log($"Failed to read text/bounds: {ex.Message}");
             }
             return (text, bounds, caretBounds);
-        }   }
-            return (text, bounds);
         }
 
         public void Dispose()
