@@ -24,7 +24,7 @@ public sealed class TrayIconService : IDisposable
         _notifyIcon = new NotifyIcon
         {
             Icon = SystemIcons.Information,
-            Text = "Gram Clone Assistant",
+            Text = "LocalScribe Assistant",
             Visible = true,
             ContextMenuStrip = BuildContextMenu()
         };
@@ -46,7 +46,7 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
-        _notifyIcon.BalloonTipTitle = "Gram Clone";
+        _notifyIcon.BalloonTipTitle = "LocalScribe";
         _notifyIcon.BalloonTipText = message;
         _notifyIcon.ShowBalloonTip(3000);
     }

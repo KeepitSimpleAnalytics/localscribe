@@ -20,7 +20,7 @@ public sealed class SettingsService
     {
         string root = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "GramClone"
+            "LocalScribe"
         );
         Directory.CreateDirectory(root);
         _settingsPath = Path.Combine(root, "settings.json");

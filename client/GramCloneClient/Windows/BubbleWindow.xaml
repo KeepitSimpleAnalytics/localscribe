@@ -1,7 +1,7 @@
 <Window x:Class="GramCloneClient.Windows.BubbleWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GramClone Bubble" Height="26" Width="26"
+        Title="LocalScribe Bubble" Height="26" Width="26"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" Focusable="False">

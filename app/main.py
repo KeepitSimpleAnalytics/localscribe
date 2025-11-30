@@ -19,7 +19,7 @@ from app.services.grammar_check import GrammarCheckService
 configure_logging(level=settings.log_level)
 logger = get_logger(__name__)
 
-app = FastAPI(title="Gram Clone Backend")
+app = FastAPI(title="LocalScribe Backend")
 config_manager = ConfigManager(Path(settings.config_path))
 grammar_service = GrammarCheckService()
 

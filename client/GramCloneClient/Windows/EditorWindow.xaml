@@ -1,7 +1,7 @@
 <Window x:Class="GramCloneClient.Windows.EditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Gram Clone Editor"
+        Title="LocalScribe Editor"
         Height="450"
         Width="700"
         WindowStartupLocation="CenterScreen"

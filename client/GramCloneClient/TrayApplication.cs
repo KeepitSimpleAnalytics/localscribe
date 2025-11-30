@@ -80,7 +80,7 @@ public sealed class TrayApplication : IDisposable
             {
                 System.Windows.MessageBox.Show(
                     $"Failed to auto-start backend: {ex.Message}",
-                    "Gram Clone",
+                    "LocalScribe",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
@@ -94,7 +94,7 @@ public sealed class TrayApplication : IDisposable
         {
             System.Windows.MessageBox.Show(
                 $"Failed to initialize tray icon:\n{ex.Message}",
-                "Gram Clone",
+                "LocalScribe",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             WpfApplication.Current.Shutdown();
@@ -221,7 +221,7 @@ public sealed class TrayApplication : IDisposable
         {
             System.Windows.MessageBox.Show(
                 $"Failed to register hotkey '{e.Hotkey}': {ex.Message}",
-                "Gram Clone",
+                "LocalScribe",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             ShowSettings();
@@ -243,7 +243,7 @@ public sealed class TrayApplication : IDisposable
         {
             System.Windows.MessageBox.Show(
                 $"Failed to register hotkey '{_settings.Hotkey}'.\nChoose another combination in Settings.\n\nDetails: {ex.Message}",
-                "Gram Clone",
+                "LocalScribe",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             ShowSettings();
