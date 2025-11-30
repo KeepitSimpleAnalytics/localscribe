@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Text;
 
 namespace GramCloneClient.Services
 {
@@ -13,8 +14,9 @@ namespace GramCloneClient.Services
         private CancellationTokenSource? _pollingCts;
         private string _lastObservedText = string.Empty;
         private Rect _lastBounds = Rect.Empty;
+        private Rect _lastCaretBounds = Rect.Empty;
 
-        public event EventHandler<(string Text, Rect Bounds)>? TextChanged;
+        public event EventHandler<(string Text, Rect ElementBounds, Rect CaretBounds)>? TextChanged;
 
         public TextFocusObserver()
         {
@@ -68,14 +70,15 @@ namespace GramCloneClient.Services
                 if (controlType == ControlType.Edit || controlType == ControlType.Document)
                 {
                     // Initial read
-                    var (text, bounds) = ReadTextAndBounds(element);
-                    Logger.Log($"Initial Read: {text.Length} chars. Bounds: {bounds}");
+                    var (text, bounds, caretBounds) = ReadTextAndBounds(element);
+                    Logger.Log($"Initial Read: {text.Length} chars. Bounds: {bounds} Caret: {caretBounds}");
 
-                    if (text != _lastObservedText || bounds != _lastBounds)
+                    if (text != _lastObservedText || bounds != _lastBounds || caretBounds != _lastCaretBounds)
                     {
                         _lastObservedText = text;
                         _lastBounds = bounds;
-                        TextChanged?.Invoke(this, (text, bounds));
+                        _lastCaretBounds = caretBounds;
+                        TextChanged?.Invoke(this, (text, bounds, caretBounds));
                     }
 
                     // Start polling for changes
@@ -106,14 +109,15 @@ namespace GramCloneClient.Services
 
                     try
                     {
-                        var (currentText, currentBounds) = ReadTextAndBounds(element);
+                        var (currentText, currentBounds, currentCaretBounds) = ReadTextAndBounds(element);
                         // Simple check: only fire if text length changed or content changed significantly
-                        if (currentText != _lastObservedText || currentBounds != _lastBounds)
+                        if (currentText != _lastObservedText || currentBounds != _lastBounds || currentCaretBounds != _lastCaretBounds)
                         {
                             _lastObservedText = currentText;
                             _lastBounds = currentBounds;
+                            _lastCaretBounds = currentCaretBounds;
                             // Logger.Log($"Text/Bounds Changed detected."); // Too noisy?
-                            TextChanged?.Invoke(this, (currentText, currentBounds));
+                            TextChanged?.Invoke(this, (currentText, currentBounds, currentCaretBounds));
                         }
                     }
                     catch
@@ -124,7 +128,6 @@ namespace GramCloneClient.Services
                 }
             }, token);
         }
-
         private void StopPolling()
         {
             _pollingCts?.Cancel();
@@ -132,12 +135,13 @@ namespace GramCloneClient.Services
             _pollingCts = null;
             _lastObservedText = string.Empty; // Reset for new focus
             _lastBounds = Rect.Empty;
-        }
-
-        private (string Text, Rect Bounds) ReadTextAndBounds(AutomationElement element)
+            _lastCaretBounds = Rect.Empty;
+        }   _lastBounds = Rect.Empty;
+        private (string Text, Rect ElementBounds, Rect CaretBounds) ReadTextAndBounds(AutomationElement element)
         {
             string text = string.Empty;
             Rect bounds = Rect.Empty;
+            Rect caretBounds = Rect.Empty;
 
             try
             {
@@ -149,6 +153,18 @@ namespace GramCloneClient.Services
                     var textPattern = (TextPattern)patternObj;
                     var documentRange = textPattern.DocumentRange;
                     text = documentRange.GetText(2000); 
+
+                    // Try to get caret position
+                    var selections = textPattern.GetSelection();
+                    if (selections.Length > 0)
+                    {
+                        var selection = selections[0];
+                        var rects = selection.GetBoundingRectangles();
+                        if (rects.Length > 0)
+                        {
+                            caretBounds = rects[0];
+                        }
+                    }
                 }
                 else if (element.TryGetCurrentPattern(ValuePattern.Pattern, out patternObj))
                 {
@@ -160,6 +176,8 @@ namespace GramCloneClient.Services
             {
                 Logger.Log($"Failed to read text/bounds: {ex.Message}");
             }
+            return (text, bounds, caretBounds);
+        }   }
             return (text, bounds);
         }
 

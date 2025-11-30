@@ -33,6 +33,7 @@ public sealed class TrayApplication : IDisposable
     private DispatcherTimer _debounceTimer;
     private string _pendingTextToCheck = string.Empty;
     private Rect _pendingBounds = Rect.Empty;
+    private Rect _pendingCaretBounds = Rect.Empty;
 
     private IntPtr _lastFocusedHandle;
 
@@ -146,10 +147,11 @@ public sealed class TrayApplication : IDisposable
         _editorWindow.HideWindow();
     }
 
-    private void OnTextObserved(object? sender, (string Text, Rect Bounds) args)
+    private void OnTextObserved(object? sender, (string Text, Rect ElementBounds, Rect CaretBounds) args)
     {
         _pendingTextToCheck = args.Text;
-        _pendingBounds = args.Bounds;
+        _pendingBounds = args.ElementBounds;
+        _pendingCaretBounds = args.CaretBounds;
         
         // Hide or reset bubble while typing? 
         // For now, let's just wait.
@@ -173,13 +175,16 @@ public sealed class TrayApplication : IDisposable
         {
              Logger.Log($"Checking text ({text.Length} chars)...");
              var response = await _backendClient.CheckTextAsync(text);
-             
              int errorCount = response.Matches.Count;
              Logger.Log($"Grammar Check Result: {errorCount} errors found.");
 
              _bubbleWindow.UpdateState(response.Matches);
-             _bubbleWindow.UpdatePosition(_pendingBounds);
              
+             // Prefer caret bounds if available, otherwise use element bounds
+             Rect targetRect = _pendingCaretBounds != Rect.Empty ? _pendingCaretBounds : _pendingBounds;
+             _bubbleWindow.UpdatePosition(targetRect);
+             
+             if (errorCount > 0)
              if (errorCount > 0)
              {
                  _bubbleWindow.Show();
