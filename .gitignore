@@ -7,6 +7,9 @@ client/GramCloneClient/obj/
 config/runtime_config.json
 tests/tmp_runtime_config.json
 
+# Claude Code
+.claude/
+
 # Python
 .mypy_cache/
 .pytest_cache/

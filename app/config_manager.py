@@ -44,9 +44,9 @@ class ConfigManager:
         with self._path.open("r", encoding="utf-8") as file:
             data = json.load(file)
         return RuntimeConfig(
-            ollama_base_url=data["ollama_base_url"].rstrip("/"),
-            grammar_model=data["grammar_model"],
-            general_model=data["general_model"],
+            ollama_base_url=data["ollama_base_url"].strip().rstrip("/"),
+            grammar_model=data["grammar_model"].strip(),
+            general_model=data["general_model"].strip(),
         )
 
     def _write(self, data: dict[str, Any]) -> None:
@@ -69,9 +69,9 @@ class ConfigManager:
     ) -> RuntimeConfig:
         with self._lock:
             updated = RuntimeConfig(
-                ollama_base_url=(ollama_base_url or self._config.ollama_base_url).rstrip("/"),
-                grammar_model=grammar_model or self._config.grammar_model,
-                general_model=general_model or self._config.general_model,
+                ollama_base_url=(ollama_base_url or self._config.ollama_base_url).strip().rstrip("/"),
+                grammar_model=(grammar_model or self._config.grammar_model).strip(),
+                general_model=(general_model or self._config.general_model).strip(),
             )
             self._write(
                 {
