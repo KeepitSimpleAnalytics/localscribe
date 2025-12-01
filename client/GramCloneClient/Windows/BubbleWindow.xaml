@@ -17,29 +17,12 @@
 
         <Popup Name="ErrorPopup" PlacementTarget="{Binding ElementName=BubbleBorder}" 
                Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
-            <Border Background="White" CornerRadius="8" BorderBrush="#DDDDDD" BorderThickness="1" Padding="10" Width="300">
+            <Border Background="White" CornerRadius="8" BorderBrush="#DDDDDD" BorderThickness="1" Padding="10" Width="350">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="10" ShadowDepth="4" Opacity="0.2"/>
                 </Border.Effect>
-                <ScrollViewer MaxHeight="400" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl Name="ErrorsList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="0,0,0,10">
-                                    <TextBlock Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Suggestions:" FontSize="11" Foreground="Gray"/>
-                                    <ItemsControl ItemsSource="{Binding Replacements}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" Foreground="#2196F3" Margin="4,2" FontStyle="Italic"/>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <Separator Margin="0,8,0,0" Opacity="0.5"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                <ScrollViewer MaxHeight="500" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl Name="ErrorsList"/>
                 </ScrollViewer>
             </Border>
         </Popup>

@@ -28,9 +28,15 @@ class GrammarCheckService:
         except Exception as e:
             logger.error(f"Error during grammar check: {e}")
             return CheckResponse(matches=[])
-        
+
         errors = []
         for match in matches:
+            # Build context from the original text (show ~40 chars before/after the error)
+            context_start = max(0, match.offset - 40)
+            context_end = min(len(text), match.offset + match.error_length + 40)
+            context = text[context_start:context_end]
+            offset_in_context = match.offset - context_start
+
             errors.append(
                 GrammarError(
                     message=match.message,
@@ -39,7 +45,10 @@ class GrammarCheckService:
                     replacements=match.replacements[:5],  # Limit to top 5 suggestions
                     rule_id=match.rule_id,
                     category=match.category,
+                    context=context,
+                    sentence=context,  # Use context as sentence for now
+                    offset_in_context=offset_in_context,
                 )
             )
-            
+
         return CheckResponse(matches=errors)

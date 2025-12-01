@@ -104,6 +104,9 @@ class GrammarError(BaseModel):
     replacements: list[str]
     rule_id: str
     category: str
+    context: str = ""              # Sentence/context containing the error
+    sentence: str = ""             # Full sentence with the error
+    offset_in_context: int = 0     # Position of error within context
 
 
 class CheckResponse(BaseModel):
