@@ -104,7 +104,7 @@ namespace GramCloneClient.Services
             {
                 while (!token.IsCancellationRequested)
                 {
-                    await Task.Delay(1000, token); // Poll every 1 second
+                    await Task.Delay(150, token); // Poll every 150ms for near-instant detection
                     if (token.IsCancellationRequested) break;
 
                     try

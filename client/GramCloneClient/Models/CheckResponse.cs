@@ -28,4 +28,13 @@ public class GrammarMatch
 
     [JsonPropertyName("category")]
     public string Category { get; set; } = "";
+
+    [JsonPropertyName("context")]
+    public string Context { get; set; } = "";
+
+    [JsonPropertyName("sentence")]
+    public string Sentence { get; set; } = "";
+
+    [JsonPropertyName("offset_in_context")]
+    public int OffsetInContext { get; set; }
 }

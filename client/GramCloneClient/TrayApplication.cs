@@ -47,9 +47,9 @@ public sealed class TrayApplication : IDisposable
         
         _textObserver.TextChanged += OnTextObserved;
         
-        // Initialize Debounce Timer (Wait 2 seconds of inactivity before checking)
+        // Initialize Debounce Timer (Wait 500ms of inactivity before checking - sweet spot for responsiveness)
         _debounceTimer = new DispatcherTimer();
-        _debounceTimer.Interval = TimeSpan.FromSeconds(2);
+        _debounceTimer.Interval = TimeSpan.FromSeconds(0.5); // 500ms - fast but avoids mid-word firing
         _debounceTimer.Tick += OnDebounceTimerTick;
         
         _bubbleWindow = new BubbleWindow();
