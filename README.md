@@ -1,4 +1,4 @@
-# Gram Clone
+# Local Scribe
 
 A local AI writing assistant that mimics the functionality of premium grammar checkers using open-source tools.
 
