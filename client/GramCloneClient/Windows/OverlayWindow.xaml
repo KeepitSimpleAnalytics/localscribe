@@ -1,0 +1,28 @@
+<Window x:Class="GramCloneClient.Windows.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LocalScribe Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        IsHitTestVisible="False"
+        WindowState="Maximized"
+        ResizeMode="NoResize">
+    <!--
+    Key Properties:
+    - WindowStyle="None": No title bar or borders
+    - AllowsTransparency="True": Enable transparent background
+    - Background="Transparent": Fully see-through
+    - Topmost="True": Always above other windows
+    - ShowInTaskbar="False": Hidden from taskbar/Alt+Tab
+    - IsHitTestVisible="False": Clicks pass through to underlying apps
+    - WindowState="Maximized": Cover entire screen
+    - ResizeMode="NoResize": Cannot be resized
+    -->
+
+    <Canvas x:Name="ErrorCanvas">
+        <!-- Error underlines will be drawn programmatically here -->
+    </Canvas>
+</Window>
