@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using GramCloneClient.Backend;
 using GramCloneClient.Models;
+using GramCloneClient.Services;
 
 using System.Windows.Media;
 
@@ -35,12 +36,16 @@ public partial class SettingsWindow : Window
         OverlayColorCombo.ItemsSource = Enum.GetValues(typeof(OverlayColorPreset));
         OverlayStyleCombo.ItemsSource = Enum.GetValues(typeof(UnderlineStyle));
         GrammarPresetCombo.ItemsSource = Enum.GetValues(typeof(GrammarCheckPreset));
+        ThemeCombo.ItemsSource = Enum.GetValues(typeof(AppTheme));
 
         LoadValues();
     }
 
     private void LoadValues()
     {
+        // Load theme setting
+        ThemeCombo.SelectedItem = _settings.Theme;
+
         BackendUrlBox.Text = _settings.BackendUrl;
         HotkeyBox.Text = _settings.Hotkey;
         ModeCombo.SelectedItem = _settings.DefaultMode;
@@ -174,6 +179,9 @@ public partial class SettingsWindow : Window
 
     private async void SaveButton_OnClick(object sender, RoutedEventArgs e)
     {
+        // Save theme setting
+        _settings.Theme = (AppTheme)(ThemeCombo.SelectedItem ?? AppTheme.Light);
+
         string backendUrl = BackendUrlBox.Text.Trim();
         _settings.BackendUrl = backendUrl;
         _settings.Hotkey = string.IsNullOrWhiteSpace(HotkeyBox.Text) ? _settings.Hotkey : HotkeyBox.Text.Trim();
@@ -296,6 +304,14 @@ public partial class SettingsWindow : Window
             return "http://" + url;
         }
         return url;
+    }
+
+    private void ThemeCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (ThemeCombo.SelectedItem == null) return;
+
+        var theme = (AppTheme)ThemeCombo.SelectedItem;
+        ThemeManager.ApplyTheme(theme);  // Live preview
     }
 
     private void GrammarPresetCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

@@ -46,6 +46,9 @@ public sealed class TrayApplication : IDisposable
         // Validate and clamp all settings on load
         SettingsValidator.ValidateAll(_settings);
 
+        // Apply saved theme
+        ThemeManager.ApplyTheme(_settings.Theme);
+
         _backendClient = new BackendClient(_settings);
 
         _hotkeyListener = new HotkeyListener(_settings.Hotkey);

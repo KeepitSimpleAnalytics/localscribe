@@ -15,6 +15,12 @@ public sealed class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ToneStyle DefaultTone { get; set; } = ToneStyle.Professional;
 
+    /// <summary>
+    /// Application theme (Light/Dark).
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AppTheme Theme { get; set; } = AppTheme.Light;
+
     public string Hotkey { get; set; } = "Ctrl+Alt+G";
 
     public bool AutoStartBackend { get; set; } = true;
@@ -35,6 +41,15 @@ public sealed class AppSettings
     /// LanguageTool grammar checking configuration.
     /// </summary>
     public LanguageToolSettings LanguageTool { get; set; } = new();
+}
+
+/// <summary>
+/// Application theme mode.
+/// </summary>
+public enum AppTheme
+{
+    Light,
+    Dark
 }
 
 /// <summary>
