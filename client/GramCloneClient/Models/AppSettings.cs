@@ -30,6 +30,11 @@ public sealed class AppSettings
     /// Timing settings for debounce, popups, and polling.
     /// </summary>
     public TimingSettings Timing { get; set; } = new();
+
+    /// <summary>
+    /// LanguageTool grammar checking configuration.
+    /// </summary>
+    public LanguageToolSettings LanguageTool { get; set; } = new();
 }
 
 /// <summary>
@@ -186,6 +191,106 @@ public sealed class TimingSettings
     /// Polling interval for text changes in milliseconds (100-500).
     /// </summary>
     public int TextPollingIntervalMs { get; set; } = 150;
+}
+
+/// <summary>
+/// Preset levels for LanguageTool checking strictness.
+/// </summary>
+public enum GrammarCheckPreset
+{
+    EnableAll,
+    Minimal,
+    Strict,
+    Custom
+}
+
+/// <summary>
+/// Configuration for LanguageTool grammar checking rules.
+/// </summary>
+public sealed class LanguageToolSettings
+{
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public GrammarCheckPreset Preset { get; set; } = GrammarCheckPreset.EnableAll;
+
+    // Category toggles - all enabled by default
+    public bool EnableGrammar { get; set; } = true;
+    public bool EnableSpelling { get; set; } = true;
+    public bool EnablePunctuation { get; set; } = true;
+    public bool EnableTypography { get; set; } = true;
+    public bool EnableStyle { get; set; } = true;
+    public bool EnableConfusedWords { get; set; } = true;
+    public bool EnableRedundancy { get; set; } = true;
+    public bool EnableCasing { get; set; } = true;
+    public bool EnableSemantics { get; set; } = true;
+    public bool EnableColloquialisms { get; set; } = true;
+    public bool EnableCompounding { get; set; } = true;
+    public bool EnablePlainEnglish { get; set; } = true;
+    public bool EnableWikipedia { get; set; } = true;
+    public bool EnableMisc { get; set; } = true;
+
+    /// <summary>
+    /// Apply a preset, setting all category toggles accordingly.
+    /// </summary>
+    public void ApplyPreset(GrammarCheckPreset preset)
+    {
+        Preset = preset;
+        switch (preset)
+        {
+            case GrammarCheckPreset.EnableAll:
+            case GrammarCheckPreset.Strict:
+                SetAllCategories(true);
+                break;
+            case GrammarCheckPreset.Minimal:
+                SetAllCategories(false);
+                EnableGrammar = true;
+                EnableSpelling = true;
+                break;
+            case GrammarCheckPreset.Custom:
+                // Don't change individual settings
+                break;
+        }
+    }
+
+    private void SetAllCategories(bool enabled)
+    {
+        EnableGrammar = enabled;
+        EnableSpelling = enabled;
+        EnablePunctuation = enabled;
+        EnableTypography = enabled;
+        EnableStyle = enabled;
+        EnableConfusedWords = enabled;
+        EnableRedundancy = enabled;
+        EnableCasing = enabled;
+        EnableSemantics = enabled;
+        EnableColloquialisms = enabled;
+        EnableCompounding = enabled;
+        EnablePlainEnglish = enabled;
+        EnableWikipedia = enabled;
+        EnableMisc = enabled;
+    }
+
+    /// <summary>
+    /// Get list of disabled category IDs for the API.
+    /// </summary>
+    public List<string> GetDisabledCategories()
+    {
+        var disabled = new List<string>();
+        if (!EnableGrammar) disabled.Add("GRAMMAR");
+        if (!EnableSpelling) disabled.Add("SPELLING");
+        if (!EnablePunctuation) disabled.Add("PUNCTUATION");
+        if (!EnableTypography) disabled.Add("TYPOGRAPHY");
+        if (!EnableStyle) disabled.Add("STYLE");
+        if (!EnableConfusedWords) disabled.Add("CONFUSED_WORDS");
+        if (!EnableRedundancy) disabled.Add("REDUNDANCY");
+        if (!EnableCasing) disabled.Add("CASING");
+        if (!EnableSemantics) disabled.Add("SEMANTICS");
+        if (!EnableColloquialisms) disabled.Add("COLLOQUIALISMS");
+        if (!EnableCompounding) disabled.Add("COMPOUNDING");
+        if (!EnablePlainEnglish) disabled.Add("PLAIN_ENGLISH");
+        if (!EnableWikipedia) disabled.Add("WIKIPEDIA");
+        if (!EnableMisc) disabled.Add("MISC");
+        return disabled;
+    }
 }
 
 /// <summary>
