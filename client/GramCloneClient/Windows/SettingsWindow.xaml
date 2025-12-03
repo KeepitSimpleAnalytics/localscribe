@@ -7,11 +7,21 @@
         MaxHeight="800"
         SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackground}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="12">
 
-            <!-- 1. Connection -->
+            <!-- 1. Appearance (Theme) -->
+            <Expander Header="Appearance" IsExpanded="False" Margin="0,0,0,8">
+                <StackPanel Margin="20,8,0,0">
+                    <TextBlock Text="Theme" FontWeight="Bold" Foreground="{DynamicResource WindowForeground}"/>
+                    <ComboBox x:Name="ThemeCombo" Width="150" HorizontalAlignment="Left" Margin="0,4,0,0"
+                              SelectionChanged="ThemeCombo_SelectionChanged"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- 2. Connection -->
             <Expander Header="Connection" IsExpanded="False" Margin="0,0,0,8">
                 <StackPanel Margin="20,8,0,0">
                     <TextBlock Text="Backend URL (FastAPI)" FontWeight="Bold"/>
@@ -23,7 +33,7 @@
                         <TextBox x:Name="StartupCommandBox" TextWrapping="Wrap" Height="36" AcceptsReturn="False"/>
                         <TextBlock Text="Working Directory" FontWeight="Bold" Margin="0,4,0,0"/>
                         <TextBox x:Name="WorkDirBox"/>
-                        <TextBlock Text="(Leave empty to use app directory)" FontStyle="Italic" Foreground="Gray" FontSize="10"/>
+                        <TextBlock Text="(Leave empty to use app directory)" FontStyle="Italic" Foreground="{DynamicResource SecondaryText}" FontSize="10"/>
                     </StackPanel>
 
                     <TextBlock Text="Ollama Base URL" FontWeight="Bold" Margin="0,12,0,0"/>
@@ -37,11 +47,11 @@
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock x:Name="BackendConnectionStatus"
                                        Text="Backend: Unknown"
-                                       Foreground="Gray"
+                                       Foreground="{DynamicResource SecondaryText}"
                                        Margin="0,0,0,2"/>
                             <TextBlock x:Name="OllamaConnectionStatus"
                                        Text="Ollama: Unknown"
-                                       Foreground="Gray"/>
+                                       Foreground="{DynamicResource SecondaryText}"/>
                         </StackPanel>
                         <Button Grid.Column="1"
                                 Content="Check &amp; Reload"
@@ -91,7 +101,7 @@
                             <TextBlock Text="Underline Color"/>
                             <ComboBox x:Name="OverlayColorCombo" SelectionChanged="OverlayColorCombo_SelectionChanged"/>
                             <StackPanel x:Name="CustomColorPanel" Visibility="Collapsed" Margin="0,4,0,0">
-                                <TextBlock Text="Hex Color (e.g. #FF3C3C)" FontSize="10" Foreground="Gray"/>
+                                <TextBlock Text="Hex Color (e.g. #FF3C3C)" FontSize="10" Foreground="{DynamicResource SecondaryText}"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -136,7 +146,7 @@
                 <StackPanel Margin="20,8,0,0">
                     <TextBlock Text="Quick Preset" FontWeight="Bold"/>
                     <TextBlock Text="Choose a preset or customize categories below"
-                               FontStyle="Italic" Foreground="Gray" FontSize="10" Margin="0,2,0,4"/>
+                               FontStyle="Italic" Foreground="{DynamicResource SecondaryText}" FontSize="10" Margin="0,2,0,4"/>
                     <ComboBox x:Name="GrammarPresetCombo" Width="200" HorizontalAlignment="Left"
                               SelectionChanged="GrammarPresetCombo_SelectionChanged"/>
 
@@ -193,7 +203,7 @@
                         <TextBlock>
                             <Run Text="Check delay: "/><Run x:Name="DebounceValueText" Text="750"/> ms
                         </TextBlock>
-                        <TextBlock Text="(wait after typing before checking)" FontStyle="Italic" Foreground="Gray" FontSize="10"/>
+                        <TextBlock Text="(wait after typing before checking)" FontStyle="Italic" Foreground="{DynamicResource SecondaryText}" FontSize="10"/>
                         <Slider x:Name="DebounceSlider" Minimum="200" Maximum="2000" Value="750"
                                 TickFrequency="100" IsSnapToTickEnabled="False"
                                 ValueChanged="DebounceSlider_ValueChanged"/>
@@ -203,7 +213,7 @@
                         <TextBlock>
                             <Run Text="Polling interval: "/><Run x:Name="PollingValueText" Text="150"/> ms
                         </TextBlock>
-                        <TextBlock Text="(how often to check for text changes)" FontStyle="Italic" Foreground="Gray" FontSize="10"/>
+                        <TextBlock Text="(how often to check for text changes)" FontStyle="Italic" Foreground="{DynamicResource SecondaryText}" FontSize="10"/>
                         <Slider x:Name="PollingSlider" Minimum="100" Maximum="500" Value="150"
                                 TickFrequency="50" IsSnapToTickEnabled="False"
                                 ValueChanged="PollingSlider_ValueChanged"/>
