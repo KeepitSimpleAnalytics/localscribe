@@ -7,7 +7,7 @@
         Topmost="True" ShowInTaskbar="False" Focusable="False">
     <Grid>
         <Border Name="BubbleBorder" CornerRadius="13" Background="#B24CAF50" BorderBrush="White" BorderThickness="1"
-                MouseLeftButtonDown="BubbleBorder_MouseLeftButtonDown" Cursor="Hand" Opacity="0.8">
+                MouseLeftButtonDown="BubbleBorder_MouseLeftButtonDown" MouseRightButtonDown="BubbleBorder_MouseRightButtonDown" Cursor="Hand" Opacity="0.8">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="3" ShadowDepth="1" Opacity="0.3"/>
             </Border.Effect>

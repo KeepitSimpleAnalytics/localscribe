@@ -27,8 +27,13 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _settings = settings;
         _backendClient = backendClient;
+
+        // Initialize combo boxes with enum values
         ModeCombo.ItemsSource = Enum.GetValues(typeof(EditingMode));
         ToneCombo.ItemsSource = Enum.GetValues(typeof(ToneStyle));
+        OverlayColorCombo.ItemsSource = Enum.GetValues(typeof(OverlayColorPreset));
+        OverlayStyleCombo.ItemsSource = Enum.GetValues(typeof(UnderlineStyle));
+
         LoadValues();
     }
 
@@ -38,11 +43,32 @@ public partial class SettingsWindow : Window
         HotkeyBox.Text = _settings.Hotkey;
         ModeCombo.SelectedItem = _settings.DefaultMode;
         ToneCombo.SelectedItem = _settings.DefaultTone;
-        
+
         AutoStartCheckBox.IsChecked = _settings.AutoStartBackend;
         StartupCommandBox.Text = _settings.BackendStartupCommand;
         WorkDirBox.Text = _settings.BackendWorkingDirectory;
         AutoStartConfigPanel.Visibility = _settings.AutoStartBackend ? Visibility.Visible : Visibility.Collapsed;
+
+        // Load overlay settings
+        OverlayEnabledCheckBox.IsChecked = _settings.Overlay.Enabled;
+        OverlayColorCombo.SelectedItem = _settings.Overlay.ColorPreset;
+        OverlayStyleCombo.SelectedItem = _settings.Overlay.Style;
+        OpacitySlider.Value = _settings.Overlay.OpacityPercent;
+        OpacityValueText.Text = _settings.Overlay.OpacityPercent.ToString();
+        ThicknessSlider.Value = _settings.Overlay.UnderlineHeight;
+        ThicknessValueText.Text = _settings.Overlay.UnderlineHeight.ToString("F1");
+
+        // Load custom color settings
+        CustomColorBox.Text = _settings.Overlay.CustomColor;
+        UpdateCustomColorPreview(_settings.Overlay.CustomColor);
+        CustomColorPanel.Visibility = _settings.Overlay.ColorPreset == OverlayColorPreset.Custom
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        // Load timing settings
+        DebounceSlider.Value = _settings.Timing.DebounceDelayMs;
+        DebounceValueText.Text = _settings.Timing.DebounceDelayMs.ToString();
+        PollingSlider.Value = _settings.Timing.TextPollingIntervalMs;
+        PollingValueText.Text = _settings.Timing.TextPollingIntervalMs.ToString();
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -130,6 +156,18 @@ public partial class SettingsWindow : Window
         _settings.AutoStartBackend = AutoStartCheckBox.IsChecked ?? false;
         _settings.BackendStartupCommand = StartupCommandBox.Text.Trim();
         _settings.BackendWorkingDirectory = WorkDirBox.Text.Trim();
+
+        // Save overlay settings
+        _settings.Overlay.Enabled = OverlayEnabledCheckBox.IsChecked ?? true;
+        _settings.Overlay.ColorPreset = (OverlayColorPreset)(OverlayColorCombo.SelectedItem ?? OverlayColorPreset.Red);
+        _settings.Overlay.Style = (UnderlineStyle)(OverlayStyleCombo.SelectedItem ?? UnderlineStyle.Solid);
+        _settings.Overlay.OpacityPercent = (int)OpacitySlider.Value;
+        _settings.Overlay.UnderlineHeight = ThicknessSlider.Value;
+        _settings.Overlay.CustomColor = CustomColorBox.Text.Trim();
+
+        // Save timing settings
+        _settings.Timing.DebounceDelayMs = (int)DebounceSlider.Value;
+        _settings.Timing.TextPollingIntervalMs = (int)PollingSlider.Value;
 
         string grammarModel = (GrammarModelCombo.Text ?? string.Empty).Trim();
         string generalModel = (GeneralModelCombo.Text ?? string.Empty).Trim();
@@ -235,8 +273,77 @@ public partial class SettingsWindow : Window
 
     private void AutoStartCheckBox_Click(object sender, RoutedEventArgs e)
     {
-        AutoStartConfigPanel.Visibility = (AutoStartCheckBox.IsChecked == true) 
-            ? Visibility.Visible 
+        AutoStartConfigPanel.Visibility = (AutoStartCheckBox.IsChecked == true)
+            ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (OpacityValueText != null)
+        {
+            OpacityValueText.Text = ((int)e.NewValue).ToString();
+        }
+    }
+
+    private void ThicknessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (ThicknessValueText != null)
+        {
+            ThicknessValueText.Text = e.NewValue.ToString("F1");
+        }
+    }
+
+    private void DebounceSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (DebounceValueText != null)
+        {
+            DebounceValueText.Text = ((int)e.NewValue).ToString();
+        }
+    }
+
+    private void PollingSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (PollingValueText != null)
+        {
+            PollingValueText.Text = ((int)e.NewValue).ToString();
+        }
+    }
+
+    private void OverlayColorCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (CustomColorPanel == null) return;
+
+        var selectedPreset = OverlayColorCombo.SelectedItem as OverlayColorPreset?;
+        CustomColorPanel.Visibility = selectedPreset == OverlayColorPreset.Custom
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void CustomColorBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        UpdateCustomColorPreview(CustomColorBox.Text);
+    }
+
+    private void UpdateCustomColorPreview(string hexColor)
+    {
+        if (ColorPreviewBox == null) return;
+
+        try
+        {
+            string hex = hexColor.Trim().TrimStart('#');
+            if (hex.Length == 6)
+            {
+                byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                ColorPreviewBox.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+            }
+        }
+        catch
+        {
+            // Invalid color - show default red
+            ColorPreviewBox.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 60, 60));
+        }
     }
 }

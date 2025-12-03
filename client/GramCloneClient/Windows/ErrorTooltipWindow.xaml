@@ -1,0 +1,35 @@
+<Window x:Class="GramCloneClient.Windows.ErrorTooltipWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Error Tooltip"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize">
+    <Border Background="White" BorderBrush="#CCCCCC" BorderThickness="1"
+            CornerRadius="6" Padding="12" MaxWidth="320">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+        </Border.Effect>
+        <StackPanel>
+            <!-- Error context with highlighted text -->
+            <Border x:Name="ContextBorder" Background="#F5F5F5" Padding="8,6"
+                    CornerRadius="4" Margin="0,0,0,8" Visibility="Collapsed">
+                <TextBlock x:Name="ContextText" TextWrapping="Wrap" FontSize="11"/>
+            </Border>
+
+            <!-- Error message -->
+            <TextBlock x:Name="ErrorMessage" TextWrapping="Wrap"
+                       FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+
+            <!-- Suggestions label -->
+            <TextBlock Text="Click to apply:" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+
+            <!-- Clickable suggestions -->
+            <ItemsControl x:Name="SuggestionsList"/>
+        </StackPanel>
+    </Border>
+</Window>
