@@ -11,12 +11,26 @@ internal static class NativeMethods
     public const int WM_HOTKEY = 0x0312;
     public const int WS_POPUP = unchecked((int)0x80000000);
 
+    // Extended window style constants for click-through overlay
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const int WS_EX_LAYERED = 0x00080000;
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_SHIFT = 0x0004;
     public const uint MOD_WIN = 0x0008;
 
     private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    // For GetCursorPos
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
@@ -52,6 +66,73 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    public const int SW_RESTORE = 9;
+    public const int SW_SHOW = 5;
+    public const uint GA_ROOT = 2;  // Get the root window (top-level window that has no owner)
+
+    /// <summary>
+    /// Force a window to the foreground by attaching to its input thread.
+    /// This bypasses Windows restrictions on SetForegroundWindow.
+    /// </summary>
+    public static bool ForceForegroundWindow(IntPtr hWnd)
+    {
+        uint currentThreadId = GetCurrentThreadId();
+        uint targetThreadId = GetWindowThreadProcessId(hWnd, out _);
+
+        bool attached = false;
+        try
+        {
+            // Attach our thread to the target window's thread
+            if (currentThreadId != targetThreadId)
+            {
+                attached = AttachThreadInput(currentThreadId, targetThreadId, true);
+            }
+
+            // Now we can reliably set foreground
+            ShowWindow(hWnd, SW_RESTORE);  // Restore if minimized
+            BringWindowToTop(hWnd);
+            SetForegroundWindow(hWnd);
+
+            return true;
+        }
+        finally
+        {
+            // Detach threads
+            if (attached)
+            {
+                AttachThreadInput(currentThreadId, targetThreadId, false);
+            }
+        }
+    }
+
+    [DllImport("user32.dll")]
+    public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);

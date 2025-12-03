@@ -12,13 +12,27 @@ namespace GramCloneClient.Windows
     public partial class BubbleWindow : Window
     {
         private List<GrammarMatch> _currentMatches = new();
+        private bool _userPositioned = false; // Track if user manually positioned the bubble
 
         public BubbleWindow()
         {
             InitializeComponent();
+            PositionNearTaskbar();
         }
 
-        public void UpdateState(List<GrammarMatch> matches)
+        /// <summary>
+        /// Position bubble near the taskbar (bottom-right of screen)
+        /// </summary>
+        private void PositionNearTaskbar()
+        {
+            double screenWidth = SystemParameters.PrimaryScreenWidth;
+            double screenHeight = SystemParameters.WorkArea.Height; // WorkArea excludes taskbar
+
+            this.Left = screenWidth - this.Width - 50;  // 50px from right edge
+            this.Top = screenHeight - this.Height - 10;  // 10px above taskbar
+        }
+
+        public void UpdateState(List<GrammarMatch> matches, string? overflowText = null)
         {
             _currentMatches = matches;
             int errorCount = matches.Count;
@@ -26,14 +40,15 @@ namespace GramCloneClient.Windows
             if (errorCount == 0)
             {
                 // Green / Good (Semi-transparent)
-                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 76, 175, 80)); 
+                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 76, 175, 80));
                 CountText.Text = "✓";
             }
             else
             {
                 // Red / Error (Semi-transparent)
-                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 244, 67, 54)); 
-                CountText.Text = errorCount.ToString();
+                BubbleBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 244, 67, 54));
+                // Show overflow indicator (e.g., "20+") if there are more errors than displayed
+                CountText.Text = overflowText ?? errorCount.ToString();
                 this.Show();
             }
             
@@ -46,33 +61,20 @@ namespace GramCloneClient.Windows
 
         public void UpdatePosition(Rect targetRect)
         {
-            // Position the bubble slightly above and to the right of the cursor
-            // targetRect is in screen coordinates
-            
-            if (targetRect == Rect.Empty) return;
+            // If user has manually positioned the bubble, don't auto-reposition
+            if (_userPositioned) return;
 
-            // Move 5px right and shift UP by the bubble height + 2px padding
-            // This places it "above" the line you are typing on.
-            double targetX = targetRect.Right + 5; 
-            double targetY = targetRect.Top - this.Height - 2;
+            // Keep bubble near taskbar - don't follow cursor
+            // PositionNearTaskbar() was called in constructor
+        }
 
-            // Ensure it stays on screen (basic check)
-            double screenWidth = SystemParameters.PrimaryScreenWidth;
-            double screenHeight = SystemParameters.PrimaryScreenHeight;
-
-            if (targetX + this.Width > screenWidth)
-            {
-                targetX = targetRect.Left - this.Width - 5; // Flip to left if offscreen
-            }
-            
-            // If it goes off the top, flip it to below
-            if (targetY < 0)
-            {
-                 targetY = targetRect.Bottom + 2;
-            }
-
-            this.Left = targetX;
-            this.Top = targetY;
+        /// <summary>
+        /// Right-click to drag the bubble to a new position
+        /// </summary>
+        private void BubbleBorder_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _userPositioned = true; // User is manually positioning
+            this.DragMove();
         }
 
         private void BubbleBorder_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)

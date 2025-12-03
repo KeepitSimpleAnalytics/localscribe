@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
+using GramCloneClient.Models;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Rectangle = System.Windows.Shapes.Rectangle;
@@ -17,13 +20,26 @@ namespace GramCloneClient.Windows;
 /// </summary>
 public partial class OverlayWindow : Window
 {
-    // Underline styling
-    private static readonly Brush ErrorBrush = new SolidColorBrush(Color.FromArgb(200, 255, 60, 60));
-    private const double UnderlineHeight = 2.5;
-    private const double UnderlineOffset = 2.0; // Pixels below the text baseline
+    // Underline styling - now configurable via settings
+    private Brush _errorBrush = new SolidColorBrush(Color.FromArgb(200, 255, 60, 60));
+    private double _underlineHeight = 2.5;
+    private double _underlineOffset = 2.0;
+    private double _waveAmplitude = 2.0;
+    private double _waveLength = 4.0;
+    private UnderlineStyle _underlineStyle = UnderlineStyle.Solid;
+    private bool _overlayEnabled = true;
 
     // Track if overlay is currently showing errors
     private bool _isShowingErrors = false;
+
+    // Hover detection
+    private DispatcherTimer? _hoverTimer;
+    private List<(Rect Bounds, GrammarMatch Match)> _errorRegions = new();
+    private readonly ErrorTooltipWindow _tooltip = new();
+    private GrammarMatch? _lastHoveredMatch = null;
+
+    // Event for replacement requests from tooltip
+    public event EventHandler<(GrammarMatch Match, string Replacement)>? ReplacementRequested;
 
     public OverlayWindow()
     {
@@ -31,10 +47,46 @@ public partial class OverlayWindow : Window
 
         // Ensure window is ready for drawing
         this.Loaded += OnLoaded;
+
+        // Wire up tooltip replacement event
+        _tooltip.ReplacementRequested += (s, args) => ReplacementRequested?.Invoke(this, args);
     }
+
+    /// <summary>
+    /// Update overlay appearance from settings. Call this when settings change.
+    /// </summary>
+    /// <param name="settings">The overlay display settings to apply.</param>
+    public void ApplySettings(OverlayDisplaySettings settings)
+    {
+        // Validate and clamp settings first
+        SettingsValidator.ValidateAndClamp(settings);
+
+        _overlayEnabled = settings.Enabled;
+        _underlineStyle = settings.Style;
+        _underlineHeight = settings.UnderlineHeight;
+        _underlineOffset = settings.UnderlineOffset;
+        _waveAmplitude = settings.WaveAmplitude;
+        _waveLength = settings.WaveLength;
+
+        // Build the brush from settings
+        var (r, g, b) = settings.GetColor();
+        var alpha = settings.GetAlpha();
+        _errorBrush = new SolidColorBrush(Color.FromArgb(alpha, r, g, b));
+    }
+
+    /// <summary>
+    /// Check if overlay is enabled in settings.
+    /// </summary>
+    public bool IsOverlayEnabled => _overlayEnabled;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Cover all screens (virtual screen includes all monitors)
+        this.Left = SystemParameters.VirtualScreenLeft;
+        this.Top = SystemParameters.VirtualScreenTop;
+        this.Width = SystemParameters.VirtualScreenWidth;
+        this.Height = SystemParameters.VirtualScreenHeight;
+
         // Make window truly click-through using extended window styles
         MakeClickThrough();
     }
@@ -51,10 +103,9 @@ public partial class OverlayWindow : Window
         // Get current extended style
         int extendedStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
 
-        // Add WS_EX_TRANSPARENT flag (0x00000020)
-        // This makes the window truly invisible to mouse input
+        // Add WS_EX_TRANSPARENT (click-through), WS_EX_LAYERED, and WS_EX_NOACTIVATE (no focus steal)
         NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE,
-            extendedStyle | NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_LAYERED);
+            extendedStyle | NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_NOACTIVATE);
     }
 
     /// <summary>
@@ -67,6 +118,12 @@ public partial class OverlayWindow : Window
         // Clear previous drawings
         ErrorCanvas.Children.Clear();
 
+        if (!_overlayEnabled || _underlineStyle == UnderlineStyle.None)
+        {
+            _isShowingErrors = false;
+            return;
+        }
+
         if (errorRects == null || errorRects.Count == 0)
         {
             _isShowingErrors = false;
@@ -76,82 +133,131 @@ public partial class OverlayWindow : Window
         foreach (var rect in errorRects)
         {
             // Convert screen coordinates to window coordinates
-            // Since window is maximized, screen coords should work directly
-            // but we subtract window position just in case
             Point topLeft = PointFromScreen(new Point(rect.Left, rect.Top));
             Point bottomRight = PointFromScreen(new Point(rect.Right, rect.Bottom));
 
-            // Create underline rectangle positioned at bottom of text
-            var underline = new Rectangle
+            double width = Math.Max(bottomRight.X - topLeft.X, 10); // Minimum width
+            double y = bottomRight.Y + _underlineOffset;
+
+            // Draw based on configured style
+            switch (_underlineStyle)
             {
-                Width = Math.Max(bottomRight.X - topLeft.X, 10), // Minimum width
-                Height = UnderlineHeight,
-                Fill = ErrorBrush,
-                RadiusX = 1,
-                RadiusY = 1
-            };
-
-            // Position at bottom of the text bounding box
-            Canvas.SetLeft(underline, topLeft.X);
-            Canvas.SetTop(underline, bottomRight.Y + UnderlineOffset);
-
-            ErrorCanvas.Children.Add(underline);
+                case UnderlineStyle.Solid:
+                    DrawSolidUnderline(topLeft.X, y, width);
+                    break;
+                case UnderlineStyle.Wavy:
+                    DrawWavyUnderline(topLeft.X, y, width);
+                    break;
+                case UnderlineStyle.Dotted:
+                    DrawDottedUnderline(topLeft.X, y, width);
+                    break;
+                case UnderlineStyle.Dashed:
+                    DrawDashedUnderline(topLeft.X, y, width);
+                    break;
+            }
         }
 
         _isShowingErrors = true;
     }
 
     /// <summary>
-    /// Draw wavy underlines (more prominent visual style).
-    /// Alternative to solid underlines.
+    /// Draw a solid underline rectangle.
     /// </summary>
-    /// <param name="errorRects">List of rectangles in screen coordinates</param>
-    public void DrawWavyMatches(List<Rect> errorRects)
+    private void DrawSolidUnderline(double x, double y, double width)
     {
-        ErrorCanvas.Children.Clear();
-
-        if (errorRects == null || errorRects.Count == 0)
+        var underline = new Rectangle
         {
-            _isShowingErrors = false;
-            return;
-        }
+            Width = width,
+            Height = _underlineHeight,
+            Fill = _errorBrush,
+            RadiusX = 1,
+            RadiusY = 1
+        };
 
-        foreach (var rect in errorRects)
+        Canvas.SetLeft(underline, x);
+        Canvas.SetTop(underline, y);
+        ErrorCanvas.Children.Add(underline);
+    }
+
+    /// <summary>
+    /// Draw a dotted underline using small circles.
+    /// </summary>
+    private void DrawDottedUnderline(double x, double y, double width)
+    {
+        double dotSpacing = _underlineHeight * 2;
+        double dotSize = _underlineHeight;
+
+        for (double dx = 0; dx < width; dx += dotSpacing)
         {
-            Point topLeft = PointFromScreen(new Point(rect.Left, rect.Top));
-            Point bottomRight = PointFromScreen(new Point(rect.Right, rect.Bottom));
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = dotSize,
+                Height = dotSize,
+                Fill = _errorBrush
+            };
 
-            double width = Math.Max(bottomRight.X - topLeft.X, 10);
-            double y = bottomRight.Y + UnderlineOffset;
-
-            // Create wavy line using polyline
-            var wavyLine = CreateWavyLine(topLeft.X, y, width);
-            ErrorCanvas.Children.Add(wavyLine);
+            Canvas.SetLeft(dot, x + dx);
+            Canvas.SetTop(dot, y);
+            ErrorCanvas.Children.Add(dot);
         }
+    }
 
-        _isShowingErrors = true;
+    /// <summary>
+    /// Draw a dashed underline using short rectangles.
+    /// </summary>
+    private void DrawDashedUnderline(double x, double y, double width)
+    {
+        double dashLength = _underlineHeight * 3;
+        double gapLength = _underlineHeight * 1.5;
+
+        for (double dx = 0; dx < width; dx += dashLength + gapLength)
+        {
+            double actualDashLength = Math.Min(dashLength, width - dx);
+            if (actualDashLength <= 0) break;
+
+            var dash = new Rectangle
+            {
+                Width = actualDashLength,
+                Height = _underlineHeight,
+                Fill = _errorBrush,
+                RadiusX = 0.5,
+                RadiusY = 0.5
+            };
+
+            Canvas.SetLeft(dash, x + dx);
+            Canvas.SetTop(dash, y);
+            ErrorCanvas.Children.Add(dash);
+        }
+    }
+
+    /// <summary>
+    /// Draw a wavy underline using polyline.
+    /// </summary>
+    private void DrawWavyUnderline(double x, double y, double width)
+    {
+        var wavyLine = CreateWavyLine(x, y, width);
+        ErrorCanvas.Children.Add(wavyLine);
     }
 
     /// <summary>
     /// Create a wavy polyline for a squiggly underline effect.
+    /// Uses configurable wave amplitude and length from settings.
     /// </summary>
     private System.Windows.Shapes.Polyline CreateWavyLine(double startX, double y, double width)
     {
         var points = new PointCollection();
-        double waveHeight = 2.0;
-        double waveLength = 4.0;
 
-        for (double x = 0; x <= width; x += waveLength / 2)
+        for (double x = 0; x <= width; x += _waveLength / 2)
         {
-            double waveY = (x / (waveLength / 2)) % 2 == 0 ? y : y + waveHeight;
+            double waveY = (x / (_waveLength / 2)) % 2 == 0 ? y : y + _waveAmplitude;
             points.Add(new Point(startX + x, waveY));
         }
 
         return new System.Windows.Shapes.Polyline
         {
             Points = points,
-            Stroke = ErrorBrush,
-            StrokeThickness = 1.5,
+            Stroke = _errorBrush,
+            StrokeThickness = Math.Max(_underlineHeight * 0.6, 1.0),
             StrokeLineJoin = PenLineJoin.Round
         };
     }
@@ -175,9 +281,93 @@ public partial class OverlayWindow : Window
     /// </summary>
     public void ShowOverlay()
     {
+        if (!_overlayEnabled || _underlineStyle == UnderlineStyle.None)
+        {
+            return; // Overlay is disabled in settings
+        }
+
         if (!IsVisible)
         {
             Show();
+        }
+    }
+
+    /// <summary>
+    /// Set error regions for hover detection and draw underlines.
+    /// </summary>
+    public void SetErrorRegions(List<(Rect Bounds, GrammarMatch Match)> regions)
+    {
+        _errorRegions = regions;
+
+        if (!_overlayEnabled || _underlineStyle == UnderlineStyle.None)
+        {
+            return; // Overlay is disabled in settings
+        }
+
+        // Draw underlines from the regions
+        var rects = regions.Select(r => r.Bounds).ToList();
+        DrawMatches(rects);
+
+        // Start hover detection if not already running
+        if (_hoverTimer == null)
+        {
+            _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            _hoverTimer.Tick += CheckMousePosition;
+        }
+        _hoverTimer.Start();
+    }
+
+    private void CheckMousePosition(object? sender, EventArgs e)
+    {
+        if (!IsVisible || _errorRegions.Count == 0)
+        {
+            _tooltip.HideTooltip();
+            return;
+        }
+
+        // Get mouse position via P/Invoke
+        if (!NativeMethods.GetCursorPos(out var pt))
+            return;
+
+        var mousePos = new Point(pt.X, pt.Y);
+
+        // Check if mouse is over the tooltip itself - keep it visible
+        if (_tooltip.IsVisible)
+        {
+            var tooltipBounds = new Rect(_tooltip.Left, _tooltip.Top, _tooltip.ActualWidth, _tooltip.ActualHeight);
+            if (tooltipBounds.Contains(mousePos))
+            {
+                // Mouse is over tooltip, keep it visible
+                return;
+            }
+        }
+
+        // Check which error region (if any) contains the mouse
+        GrammarMatch? hoveredMatch = null;
+        foreach (var (bounds, match) in _errorRegions)
+        {
+            // Expand hit area slightly for easier hover (underline is thin)
+            var expandedBounds = new Rect(
+                bounds.X - 2,
+                bounds.Y - 2,
+                bounds.Width + 4,
+                bounds.Height + 8);  // Extra height below for underline area
+
+            if (expandedBounds.Contains(mousePos))
+            {
+                hoveredMatch = match;
+                break;
+            }
+        }
+
+        // Only update tooltip if hovered error changed
+        if (hoveredMatch != _lastHoveredMatch)
+        {
+            _lastHoveredMatch = hoveredMatch;
+            if (hoveredMatch != null)
+                _tooltip.ShowForMatch(hoveredMatch, mousePos);
+            else
+                _tooltip.HideTooltip();
         }
     }
 
@@ -192,5 +382,11 @@ public partial class OverlayWindow : Window
             Hide();
         }
         Clear();
+
+        // Stop hover detection and hide tooltip
+        _hoverTimer?.Stop();
+        _tooltip.HideTooltip();
+        _lastHoveredMatch = null;
+        _errorRegions.Clear();
     }
 }
