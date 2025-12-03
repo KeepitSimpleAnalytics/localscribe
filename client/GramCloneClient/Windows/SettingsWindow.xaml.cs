@@ -19,6 +19,7 @@ public partial class SettingsWindow : Window
     private readonly BackendClient _backendClient;
     private IReadOnlyList<string> _availableModels = Array.Empty<string>();
     private bool _isLoading;
+    private bool _isLoadingCategories;
 
     public event EventHandler<AppSettings>? SettingsSaved;
 
@@ -33,6 +34,7 @@ public partial class SettingsWindow : Window
         ToneCombo.ItemsSource = Enum.GetValues(typeof(ToneStyle));
         OverlayColorCombo.ItemsSource = Enum.GetValues(typeof(OverlayColorPreset));
         OverlayStyleCombo.ItemsSource = Enum.GetValues(typeof(UnderlineStyle));
+        GrammarPresetCombo.ItemsSource = Enum.GetValues(typeof(GrammarCheckPreset));
 
         LoadValues();
     }
@@ -47,7 +49,6 @@ public partial class SettingsWindow : Window
         AutoStartCheckBox.IsChecked = _settings.AutoStartBackend;
         StartupCommandBox.Text = _settings.BackendStartupCommand;
         WorkDirBox.Text = _settings.BackendWorkingDirectory;
-        AutoStartConfigPanel.Visibility = _settings.AutoStartBackend ? Visibility.Visible : Visibility.Collapsed;
 
         // Load overlay settings
         OverlayEnabledCheckBox.IsChecked = _settings.Overlay.Enabled;
@@ -69,6 +70,32 @@ public partial class SettingsWindow : Window
         DebounceValueText.Text = _settings.Timing.DebounceDelayMs.ToString();
         PollingSlider.Value = _settings.Timing.TextPollingIntervalMs;
         PollingValueText.Text = _settings.Timing.TextPollingIntervalMs.ToString();
+
+        // Load LanguageTool settings
+        GrammarPresetCombo.SelectedItem = _settings.LanguageTool.Preset;
+        LoadCategoryCheckboxes();
+    }
+
+    private void LoadCategoryCheckboxes()
+    {
+        _isLoadingCategories = true;
+
+        CatGrammarCheck.IsChecked = _settings.LanguageTool.EnableGrammar;
+        CatSpellingCheck.IsChecked = _settings.LanguageTool.EnableSpelling;
+        CatPunctuationCheck.IsChecked = _settings.LanguageTool.EnablePunctuation;
+        CatTypographyCheck.IsChecked = _settings.LanguageTool.EnableTypography;
+        CatStyleCheck.IsChecked = _settings.LanguageTool.EnableStyle;
+        CatConfusedWordsCheck.IsChecked = _settings.LanguageTool.EnableConfusedWords;
+        CatRedundancyCheck.IsChecked = _settings.LanguageTool.EnableRedundancy;
+        CatCasingCheck.IsChecked = _settings.LanguageTool.EnableCasing;
+        CatSemanticsCheck.IsChecked = _settings.LanguageTool.EnableSemantics;
+        CatColloquialismsCheck.IsChecked = _settings.LanguageTool.EnableColloquialisms;
+        CatCompoundingCheck.IsChecked = _settings.LanguageTool.EnableCompounding;
+        CatPlainEnglishCheck.IsChecked = _settings.LanguageTool.EnablePlainEnglish;
+        CatWikipediaCheck.IsChecked = _settings.LanguageTool.EnableWikipedia;
+        CatMiscCheck.IsChecked = _settings.LanguageTool.EnableMisc;
+
+        _isLoadingCategories = false;
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -271,11 +298,40 @@ public partial class SettingsWindow : Window
         return url;
     }
 
-    private void AutoStartCheckBox_Click(object sender, RoutedEventArgs e)
+    private void GrammarPresetCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        AutoStartConfigPanel.Visibility = (AutoStartCheckBox.IsChecked == true)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        if (_isLoadingCategories || GrammarPresetCombo.SelectedItem == null) return;
+
+        var preset = (GrammarCheckPreset)GrammarPresetCombo.SelectedItem;
+        _settings.LanguageTool.ApplyPreset(preset);
+        LoadCategoryCheckboxes();
+    }
+
+    private void CategoryCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingCategories) return;
+
+        // Update settings from checkboxes
+        _settings.LanguageTool.EnableGrammar = CatGrammarCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableSpelling = CatSpellingCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnablePunctuation = CatPunctuationCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableTypography = CatTypographyCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableStyle = CatStyleCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableConfusedWords = CatConfusedWordsCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableRedundancy = CatRedundancyCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableCasing = CatCasingCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableSemantics = CatSemanticsCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableColloquialisms = CatColloquialismsCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableCompounding = CatCompoundingCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnablePlainEnglish = CatPlainEnglishCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableWikipedia = CatWikipediaCheck.IsChecked ?? true;
+        _settings.LanguageTool.EnableMisc = CatMiscCheck.IsChecked ?? true;
+
+        // Set preset to Custom since user modified manually
+        _settings.LanguageTool.Preset = GrammarCheckPreset.Custom;
+        _isLoadingCategories = true;
+        GrammarPresetCombo.SelectedItem = GrammarCheckPreset.Custom;
+        _isLoadingCategories = false;
     }
 
     private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
