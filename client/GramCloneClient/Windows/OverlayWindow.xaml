@@ -7,8 +7,9 @@
         Background="Transparent"
         Topmost="True"
         ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
         IsHitTestVisible="False"
-        WindowState="Maximized"
         ResizeMode="NoResize">
     <!--
     Key Properties:
