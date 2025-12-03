@@ -122,15 +122,34 @@ public sealed class BackendClient : IDisposable
         return payload.Models;
     }
 
-    public async Task<CheckResponse> CheckTextAsync(string text, CancellationToken cancellationToken = default)
+    public async Task<CheckResponse> CheckTextAsync(
+        string text,
+        LanguageToolSettings? languageToolConfig = null,
+        CancellationToken cancellationToken = default)
     {
         string url = BuildUrl("/v1/text/check");
-        var payload = new { text };
+
+        object payload;
+        if (languageToolConfig != null)
+        {
+            var disabledCategories = languageToolConfig.GetDisabledCategories();
+            payload = disabledCategories.Count > 0
+                ? new
+                {
+                    text,
+                    language_tool_config = new { disabled_categories = disabledCategories }
+                }
+                : new { text } as object;
+        }
+        else
+        {
+            payload = new { text };
+        }
 
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            // Gracefully handle errors for now, maybe return empty? 
+            // Gracefully handle errors for now, maybe return empty?
             // Or throw so caller knows? Throwing is safer for debugging.
             string error = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new InvalidOperationException($"Check failed ({response.StatusCode}): {error}");

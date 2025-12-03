@@ -71,7 +71,7 @@ async def list_available_models() -> schemas.ModelListResponse:
 @app.post("/v1/text/check", response_model=schemas.CheckResponse)
 async def check_text(payload: schemas.CheckRequest) -> schemas.CheckResponse:
     """Check text for grammar errors using LanguageTool."""
-    return grammar_service.check(payload.text)
+    return grammar_service.check(payload.text, payload.language_tool_config)
 
 
 @app.post("/v1/text/edit", response_model=schemas.EditResponse)

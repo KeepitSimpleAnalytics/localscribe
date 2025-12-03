@@ -1,9 +1,11 @@
 """Service for checking grammar using LanguageTool."""
 
+from __future__ import annotations
+
 import logging
 import os
 import language_tool_python
-from app.schemas import CheckResponse, GrammarError
+from app.schemas import CheckResponse, GrammarError, LanguageToolConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,9 @@ class GrammarCheckService:
             self._tool = None
             self._enabled = False
 
-    def check(self, text: str) -> CheckResponse:
+    def check(
+        self, text: str, config: LanguageToolConfig | None = None
+    ) -> CheckResponse:
         if not self._enabled or not self._tool:
             return CheckResponse(matches=[])
 
@@ -29,8 +33,16 @@ class GrammarCheckService:
             logger.error(f"Error during grammar check: {e}")
             return CheckResponse(matches=[])
 
+        # Build set of disabled categories for filtering
+        disabled_categories: set[str] = set()
+        if config and config.disabled_categories:
+            disabled_categories = {cat.upper() for cat in config.disabled_categories}
+
         errors = []
         for match in matches:
+            # Skip matches in disabled categories
+            if match.category.upper() in disabled_categories:
+                continue
             # Build context from the original text (show ~40 chars before/after the error)
             context_start = max(0, match.offset - 40)
             context_end = min(len(text), match.offset + match.error_length + 40)

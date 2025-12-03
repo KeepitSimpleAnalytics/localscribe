@@ -89,10 +89,23 @@ class RuntimeConfigUpdate(BaseModel):
     general_model: str | None = None
 
 
+class LanguageToolConfig(BaseModel):
+    """Configuration for LanguageTool rule filtering."""
+
+    disabled_categories: list[str] = Field(
+        default_factory=list,
+        description="List of category IDs to disable (e.g., 'STYLE', 'TYPOGRAPHY')",
+    )
+
+
 class CheckRequest(BaseModel):
     """Request payload for /v1/text/check."""
 
     text: str = Field(..., min_length=1, description="Text to check for grammar errors.")
+    language_tool_config: LanguageToolConfig | None = Field(
+        default=None,
+        description="Optional LanguageTool rule configuration",
+    )
 
 
 class GrammarError(BaseModel):

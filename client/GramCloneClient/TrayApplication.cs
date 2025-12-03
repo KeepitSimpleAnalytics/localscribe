@@ -195,7 +195,7 @@ public sealed class TrayApplication : IDisposable
         try
         {
             Logger.Log($"Checking text ({text.Length} chars)...");
-            var response = await _backendClient.CheckTextAsync(text);
+            var response = await _backendClient.CheckTextAsync(text, _settings.LanguageTool);
             int totalErrors = response.Matches.Count;
             Logger.Log($"Grammar Check Result: {totalErrors} errors found.");
 
