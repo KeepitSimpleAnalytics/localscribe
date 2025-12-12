@@ -225,7 +225,7 @@ public sealed class TrayApplication : IDisposable
         });
     }
 
-    private void OnDiagnosticsUpdated(object? sender, TextFocusObserver.FocusDiagnostics e)
+    private void OnDiagnosticsUpdated(object? sender, FocusDiagnostics e)
     {
         if (_diagnosticsWindow.IsVisible)
         {
