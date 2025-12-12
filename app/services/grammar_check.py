@@ -44,8 +44,14 @@ class GrammarCheckService:
             if match.category.upper() in disabled_categories:
                 continue
             # Build context from the original text (show ~40 chars before/after the error)
+            # Handle potential attribute naming differences in language_tool_python versions
+            error_length = getattr(match, "errorLength", getattr(match, "error_length", None))
+            if error_length is None:
+                # Fallback: try to guess from context or default to 1
+                error_length = len(match.context) if match.context else 1
+            
             context_start = max(0, match.offset - 40)
-            context_end = min(len(text), match.offset + match.error_length + 40)
+            context_end = min(len(text), match.offset + error_length + 40)
             context = text[context_start:context_end]
             offset_in_context = match.offset - context_start
 
@@ -53,7 +59,7 @@ class GrammarCheckService:
                 GrammarError(
                     message=match.message,
                     offset=match.offset,
-                    length=match.error_length,
+                    length=error_length,
                     replacements=match.replacements[:5],  # Limit to top 5 suggestions
                     rule_id=match.rule_id,
                     category=match.category,
