@@ -48,12 +48,12 @@ public partial class DiagnosticsWindow : Window
         if (hasPattern)
         {
             PatternStatusText.Text = "Supported (TextPattern)";
-            PatternStatusText.Foreground = Brushes.LightGreen;
+            PatternStatusText.Foreground = System.Windows.Media.Brushes.LightGreen;
         }
         else
         {
             PatternStatusText.Text = "Unsupported / Fallback";
-            PatternStatusText.Foreground = Brushes.Orange; // or Red
+            PatternStatusText.Foreground = System.Windows.Media.Brushes.Orange; // or Red
         }
 
         BoundsText.Text = $"Bounds: ({{bounds.X:F0}}, {{bounds.Y:F0}}, {{bounds.Width:F0}}, {{bounds.Height:F0}})";
@@ -68,10 +68,10 @@ public partial class DiagnosticsWindow : Window
 
     public void UpdateHealth(bool backendOk, bool ollamaOk)
     {
-        BackendStatusDot.Fill = backendOk ? Brushes.LightGreen : Brushes.Red;
+        BackendStatusDot.Fill = backendOk ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.Red;
         BackendStatusText.Text = backendOk ? "Backend: Connected" : "Backend: Disconnected";
 
-        OllamaStatusDot.Fill = ollamaOk ? Brushes.LightGreen : Brushes.Red;
+        OllamaStatusDot.Fill = ollamaOk ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.Red;
         OllamaStatusText.Text = ollamaOk ? "Ollama: Connected" : "Ollama: Unreachable";
     }
 
