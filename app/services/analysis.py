@@ -49,10 +49,10 @@ CLARITY_TOOL = {
 class AnalysisService:
     """Service for semantic text analysis."""
 
-    def __init__(self, *, config_manager: ConfigManager, timeout: float, settings_obj) -> None:
+    def __init__(self, *, config_manager: ConfigManager, timeout: float, settings) -> None:
         self._config_manager = config_manager
         self._timeout = timeout
-        self._settings = settings_obj # Store the settings object
+        self._settings = settings # Store the settings object
 
     async def analyze(self, text: str) -> AnalysisResponse:
         """Analyze text for semantic clarity issues."""
