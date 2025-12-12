@@ -72,7 +72,6 @@ class RuntimeConfigResponse(BaseModel):
     ollama_base_url: HttpUrl
     grammar_model: str
     general_model: str
-    analysis_model: str  # Added for analysis features
 
     @classmethod
     def from_runtime_config(cls, config: RuntimeConfig) -> "RuntimeConfigResponse":
@@ -80,7 +79,6 @@ class RuntimeConfigResponse(BaseModel):
             ollama_base_url=config.ollama_base_url,
             grammar_model=config.grammar_model,
             general_model=config.general_model,
-            analysis_model=config.analysis_model,
         )
 
 
@@ -90,7 +88,6 @@ class RuntimeConfigUpdate(BaseModel):
     ollama_base_url: HttpUrl | None = None
     grammar_model: str | None = None
     general_model: str | None = None
-    analysis_model: str | None = None
 
 
 class LanguageToolConfig(BaseModel):
