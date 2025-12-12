@@ -43,7 +43,6 @@ class ConfigManager:
             self._write(DEFAULT_RUNTIME_CONFIG)
         with self._path.open("r", encoding="utf-8") as file:
             data = json.load(file)
-            # No longer need to handle migration/missing keys for analysis_model as it's removed
         return RuntimeConfig(
             ollama_base_url=data["ollama_base_url"].strip().rstrip("/"),
             grammar_model=data["grammar_model"].strip(),
@@ -67,6 +66,7 @@ class ConfigManager:
         ollama_base_url: str | None = None,
         grammar_model: str | None = None,
         general_model: str | None = None,
+        # analysis_model argument removed
     ) -> RuntimeConfig:
         with self._lock:
             updated = RuntimeConfig(
