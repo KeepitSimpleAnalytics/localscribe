@@ -109,37 +109,142 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Draw underlines at the specified screen rectangles.
-    /// Each rect represents the bounding box of an error in screen coordinates.
+    /// Set error regions for hover detection and draw underlines/highlights.
     /// </summary>
-    /// <param name="errorRects">List of rectangles in screen coordinates</param>
-    public void DrawMatches(List<Rect> errorRects)
+    public void SetErrorRegions(
+        List<(Rect Bounds, GrammarMatch Match)> grammarRegions,
+        List<(Rect Bounds, GrammarMatch Match)> analysisRegions = null)
     {
-        // Clear previous drawings
+        _errorRegions = new List<(Rect Bounds, GrammarMatch Match)>();
+        
+        if (grammarRegions != null)
+            _errorRegions.AddRange(grammarRegions);
+            
+        if (analysisRegions != null)
+            _errorRegions.AddRange(analysisRegions);
+
+        if (!_overlayEnabled)
+        {
+            return; 
+        }
+
+        // Clear everything once at the start
         ErrorCanvas.Children.Clear();
+
+        // 1. Draw Analysis Highlights (Background)
+        if (analysisRegions != null && analysisRegions.Count > 0)
+        {
+            // Extract issue type from RuleId (e.g., "SEMANTIC_COMPLEXITY" -> "complexity")
+            var issues = analysisRegions.Select(r => {
+                string type = r.Match.RuleId.Replace("SEMANTIC_", "").ToLower();
+                return (r.Bounds, type);
+            }).ToList();
+            
+            DrawAnalysisIssues(issues);
+        }
+
+        // 2. Draw Grammar Underlines (Foreground)
+        if (grammarRegions != null && grammarRegions.Count > 0)
+        {
+            var rects = grammarRegions.Select(r => r.Bounds).ToList();
+            DrawMatches(rects, clearCanvas: false);
+        }
+
+        _isShowingErrors = _errorRegions.Count > 0;
+
+        // Start hover detection if not already running
+        if (_hoverTimer == null)
+        {
+            _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            _hoverTimer.Tick += CheckMousePosition;
+        }
+        _hoverTimer.Start();
+    }
+
+    private void CheckMousePosition(object? sender, EventArgs e)
+    {
+        if (!IsVisible || _errorRegions.Count == 0)
+        {
+            _tooltip.HideTooltip();
+            return;
+        }
+
+        // Get mouse position via P/Invoke
+        if (!NativeMethods.GetCursorPos(out var pt))
+            return;
+
+        var mousePos = new Point(pt.X, pt.Y);
+
+        // Check if mouse is over the tooltip itself - keep it visible
+        if (_tooltip.IsVisible)
+        {
+            var tooltipBounds = new Rect(_tooltip.Left, _tooltip.Top, _tooltip.ActualWidth, _tooltip.ActualHeight);
+            if (tooltipBounds.Contains(mousePos))
+            {
+                // Mouse is over tooltip, keep it visible
+                return;
+            }
+        }
+
+        // Check which error region (if any) contains the mouse
+        GrammarMatch? hoveredMatch = null;
+        foreach (var (bounds, match) in _errorRegions)
+        {
+            // Expand hit area generously for easier hover
+            var expandedBounds = new Rect(
+                bounds.X - 5,
+                bounds.Y - 5,
+                bounds.Width + 10,
+                bounds.Height + 15);  // Extra height below for underline area
+
+            if (expandedBounds.Contains(mousePos))
+            {
+                hoveredMatch = match;
+                break;
+            }
+        }
+
+        // Only update tooltip if hovered error changed
+        if (hoveredMatch != _lastHoveredMatch)
+        {
+            _lastHoveredMatch = hoveredMatch;
+            if (hoveredMatch != null)
+                _tooltip.ShowForMatch(hoveredMatch, mousePos);
+            else
+                _tooltip.HideTooltip();
+        }
+    }
+
+    /// <summary>
+    /// Draw underlines at the specified screen rectangles.
+    /// </summary>
+    public void DrawMatches(List<Rect> errorRects, bool clearCanvas = true)
+    {
+        if (clearCanvas)
+        {
+            ErrorCanvas.Children.Clear();
+        }
 
         if (!_overlayEnabled || _underlineStyle == UnderlineStyle.None)
         {
-            _isShowingErrors = false;
+            if (clearCanvas) _isShowingErrors = false;
             return;
         }
 
         if (errorRects == null || errorRects.Count == 0)
         {
-            _isShowingErrors = false;
+            if (clearCanvas) _isShowingErrors = false;
             return;
         }
 
         foreach (var rect in errorRects)
         {
-            // Convert screen coordinates to window coordinates
             Point topLeft = PointFromScreen(new Point(rect.Left, rect.Top));
             Point bottomRight = PointFromScreen(new Point(rect.Right, rect.Bottom));
 
             double width = Math.Max(bottomRight.X - topLeft.X, 10); // Minimum width
             double y = bottomRight.Y + _underlineOffset;
 
-            // Draw based on configured style
             switch (_underlineStyle)
             {
                 case UnderlineStyle.Solid:
@@ -158,6 +263,51 @@ public partial class OverlayWindow : Window
         }
 
         _isShowingErrors = true;
+    }
+
+    /// <summary>
+    /// Draw highlights for semantic analysis issues.
+    /// Uses background highlights instead of underlines.
+    /// </summary>
+    private void DrawAnalysisIssues(List<(Rect Rect, string IssueType)> issues)
+    {
+        foreach (var (rect, issueType) in issues)
+        {
+            Point topLeft = PointFromScreen(new Point(rect.Left, rect.Top));
+            Point bottomRight = PointFromScreen(new Point(rect.Right, rect.Bottom));
+
+            double width = Math.Max(bottomRight.X - topLeft.X, 10);
+            double height = Math.Max(bottomRight.Y - topLeft.Y, 10);
+            
+            // Draw highlight behind text (semi-transparent)
+            DrawHighlight(topLeft.X, topLeft.Y, width, height, issueType);
+        }
+    }
+
+    private void DrawHighlight(double x, double y, double width, double height, string issueType)
+    {
+        var color = issueType switch
+        {
+            "complexity" => Color.FromArgb(80, 255, 200, 0),    // Yellow
+            "passive_voice" => Color.FromArgb(80, 0, 100, 255), // Blue
+            "wordiness" => Color.FromArgb(80, 150, 150, 150),   // Gray
+            "jargon" => Color.FromArgb(80, 180, 50, 200),       // Purple
+            _ => Color.FromArgb(80, 255, 255, 0)                // Default Yellow
+        };
+
+        var highlight = new Rectangle
+        {
+            Width = width,
+            Height = height,
+            Fill = new SolidColorBrush(color),
+            RadiusX = 2,
+            RadiusY = 2
+        };
+
+        Canvas.SetLeft(highlight, x);
+        Canvas.SetTop(highlight, y);
+        // Insert at 0 so it's behind everything
+        ErrorCanvas.Children.Insert(0, highlight);
     }
 
     /// <summary>
@@ -289,85 +439,6 @@ public partial class OverlayWindow : Window
         if (!IsVisible)
         {
             Show();
-        }
-    }
-
-    /// <summary>
-    /// Set error regions for hover detection and draw underlines.
-    /// </summary>
-    public void SetErrorRegions(List<(Rect Bounds, GrammarMatch Match)> regions)
-    {
-        _errorRegions = regions;
-
-        if (!_overlayEnabled || _underlineStyle == UnderlineStyle.None)
-        {
-            return; // Overlay is disabled in settings
-        }
-
-        // Draw underlines from the regions
-        var rects = regions.Select(r => r.Bounds).ToList();
-        DrawMatches(rects);
-
-        // Start hover detection if not already running
-        if (_hoverTimer == null)
-        {
-            _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-            _hoverTimer.Tick += CheckMousePosition;
-        }
-        _hoverTimer.Start();
-    }
-
-    private void CheckMousePosition(object? sender, EventArgs e)
-    {
-        if (!IsVisible || _errorRegions.Count == 0)
-        {
-            _tooltip.HideTooltip();
-            return;
-        }
-
-        // Get mouse position via P/Invoke
-        if (!NativeMethods.GetCursorPos(out var pt))
-            return;
-
-        var mousePos = new Point(pt.X, pt.Y);
-
-        // Check if mouse is over the tooltip itself - keep it visible
-        if (_tooltip.IsVisible)
-        {
-            var tooltipBounds = new Rect(_tooltip.Left, _tooltip.Top, _tooltip.ActualWidth, _tooltip.ActualHeight);
-            if (tooltipBounds.Contains(mousePos))
-            {
-                // Mouse is over tooltip, keep it visible
-                return;
-            }
-        }
-
-        // Check which error region (if any) contains the mouse
-        GrammarMatch? hoveredMatch = null;
-        foreach (var (bounds, match) in _errorRegions)
-        {
-            // Expand hit area slightly for easier hover (underline is thin)
-            var expandedBounds = new Rect(
-                bounds.X - 2,
-                bounds.Y - 2,
-                bounds.Width + 4,
-                bounds.Height + 8);  // Extra height below for underline area
-
-            if (expandedBounds.Contains(mousePos))
-            {
-                hoveredMatch = match;
-                break;
-            }
-        }
-
-        // Only update tooltip if hovered error changed
-        if (hoveredMatch != _lastHoveredMatch)
-        {
-            _lastHoveredMatch = hoveredMatch;
-            if (hoveredMatch != null)
-                _tooltip.ShowForMatch(hoveredMatch, mousePos);
-            else
-                _tooltip.HideTooltip();
         }
     }
 

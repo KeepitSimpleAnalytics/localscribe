@@ -15,20 +15,23 @@ A local AI writing assistant that mimics the functionality of premium grammar ch
 
 ## Features
 
-*   **Real-Time Checking:** Monitors text focus and provides instant grammar feedback via a floating "bubble".
+*   **Real-Time Checking:** Monitors text focus and provides instant grammar feedback via a floating "bubble" and red underlines.
+*   **Semantic Clarity:** Analyzes text for complexity, passive voice, and wordiness using local LLMs, highlighting issues with yellow/blue/purple backgrounds.
 *   **Local Processing:** All text stays on your machine.
 *   **Rewriting:** Use the hotkey (default `Ctrl+Alt+G`) to open the full editor for rewriting (Professional, Casual, Academic modes).
-*   **Ollama Integration:** Uses local LLMs for advanced style improvements.
+*   **Ollama Integration:** Uses local LLMs for advanced style improvements and analysis.
 
 ## Architecture
 
 ### Backend (Python/FastAPI)
 *   **Grammar:** `language-tool-python` (Java wrapper for LanguageTool).
+*   **Analysis:** Custom LLM Tool Use (Ollama) for semantic clarity checks.
 *   **Rewriting:** Ollama (via `langchain` or direct API).
 *   **API:** Exposes endpoints at `http://localhost:8000`.
 
 ### Client (C# WPF)
 *   **UI Automation:** Uses Microsoft UI Automation to detect focused text fields.
+*   **Overlay:** Draws underlines (grammar) and highlights (clarity) directly on screen using a click-through transparent window.
 *   **Tray App:** Runs silently in the background.
 *   **Backend Manager:** Automatically launches and manages the Python backend process.
 
@@ -66,7 +69,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### Model server (Ollama example)
 
 ```powershell
-ollama pull llama3:instruct             # proofread model
+ollama pull llama3:instruct             # proofread & analysis model
 ollama pull qwen2:7b-instruct           # rewrite/tone/technical model
 ollama serve
 ```
@@ -78,7 +81,8 @@ ollama serve
   {
     "ollama_base_url": "http://10.8.14.169:11434",
     "grammar_model": "llama3:instruct",
-    "general_model": "qwen2:7b-instruct"
+    "general_model": "qwen2:7b-instruct",
+    "analysis_model": "llama3:instruct"
   }
   ```
   - The Windows settings dialog reads/writes this file through the backend’s `/runtime/config` endpoint. Changing models or the Ollama base URL never requires editing environment variables.
@@ -88,6 +92,7 @@ ollama serve
 
 - `GET /health` → `{ "status": "ok", "environment": "development" }`
 - `POST /v1/text/edit` – main editing API.
+- `POST /v1/text/analyze` – semantic analysis API.
 - `GET /runtime/config` / `POST /runtime/config` – read and update Ollama base URL + model selection.
 - `GET /runtime/models` – proxies to Ollama’s `/api/tags` and returns available model names.
 
@@ -118,10 +123,15 @@ dotnet run --project client/GramCloneClient/GramCloneClient.csproj
   - Tone dropdown when mode=tone.
   - Run button calls `/v1/text/edit`.
   - Apply button copies the improved text and pastes it back into the source application.
+- Overlay & Error Checking:
+  - **Red Solid Lines:** Grammar errors found by LanguageTool.
+  - **Yellow/Blue Highlights:** Semantic issues (complexity, passive voice) found by LLM analysis.
+  - **Note:** If you see only *dotted* lines and no tooltip, these are likely from the application's native spellchecker, not LocalScribe. Ensure the LocalScribe backend is running and the "G" tray icon is visible.
 - Settings dialog:
   - Backend URL (FastAPI base).
   - Hotkey editor (`Ctrl+Alt+G`, `Win+Shift+H`, etc.).
   - Default mode and tone.
+  - Overlay settings (Enable/Disable, Style, Colors, Opacity).
   - Ollama base URL (set to wherever Ollama listens). Use **Reload Models** to push the URL to the backend and fetch the model list from that host.
   - Proofread model + Rewrite/Tone/Technical model dropdowns (editable) populated via `GET /runtime/models` once the Ollama URL is reachable.
   - Saving updates both the local client settings and the backend runtime configuration.

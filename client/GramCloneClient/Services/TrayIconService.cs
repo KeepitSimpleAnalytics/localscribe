@@ -12,13 +12,15 @@ namespace GramCloneClient.Services;
 public sealed class TrayIconService : IDisposable
 {
     private readonly Action _onShowSettings;
+    private readonly Action _onShowAbout;
     private readonly Action _onExit;
     private NotifyIcon? _notifyIcon;
     private Icon? _customIcon;
 
-    public TrayIconService(Action onShowSettings, Action onExit)
+    public TrayIconService(Action onShowSettings, Action onShowAbout, Action onExit)
     {
         _onShowSettings = onShowSettings;
+        _onShowAbout = onShowAbout;
         _onExit = onExit;
     }
 
@@ -149,6 +151,7 @@ public sealed class TrayIconService : IDisposable
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Settings...", null, (_, _) => _onShowSettings());
+        menu.Items.Add("About...", null, (_, _) => _onShowAbout());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => _onExit());
         return menu;
