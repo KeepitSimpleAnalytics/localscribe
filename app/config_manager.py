@@ -17,6 +17,7 @@ DEFAULT_RUNTIME_CONFIG = {
     "ollama_base_url": "http://10.8.14.169:11434",
     "grammar_model": "llama3:instruct",
     "general_model": "qwen2:7b-instruct",
+    "analysis_model": "llama3:instruct",
 }
 
 
@@ -27,6 +28,7 @@ class RuntimeConfig:
     ollama_base_url: str
     grammar_model: str
     general_model: str
+    analysis_model: str
 
 
 class ConfigManager:
@@ -43,10 +45,14 @@ class ConfigManager:
             self._write(DEFAULT_RUNTIME_CONFIG)
         with self._path.open("r", encoding="utf-8") as file:
             data = json.load(file)
+            # Handle migration/missing keys for existing configs
+            if "analysis_model" not in data:
+                data["analysis_model"] = DEFAULT_RUNTIME_CONFIG["analysis_model"]
         return RuntimeConfig(
             ollama_base_url=data["ollama_base_url"].strip().rstrip("/"),
             grammar_model=data["grammar_model"].strip(),
             general_model=data["general_model"].strip(),
+            analysis_model=data.get("analysis_model", DEFAULT_RUNTIME_CONFIG["analysis_model"]).strip(),
         )
 
     def _write(self, data: dict[str, Any]) -> None:
@@ -58,6 +64,7 @@ class ConfigManager:
                 ollama_base_url=self._config.ollama_base_url,
                 grammar_model=self._config.grammar_model,
                 general_model=self._config.general_model,
+                analysis_model=self._config.analysis_model,
             )
 
     def update_runtime_config(
@@ -66,18 +73,21 @@ class ConfigManager:
         ollama_base_url: str | None = None,
         grammar_model: str | None = None,
         general_model: str | None = None,
+        analysis_model: str | None = None,
     ) -> RuntimeConfig:
         with self._lock:
             updated = RuntimeConfig(
                 ollama_base_url=(ollama_base_url or self._config.ollama_base_url).strip().rstrip("/"),
                 grammar_model=(grammar_model or self._config.grammar_model).strip(),
                 general_model=(general_model or self._config.general_model).strip(),
+                analysis_model=(analysis_model or self._config.analysis_model).strip(),
             )
             self._write(
                 {
                     "ollama_base_url": updated.ollama_base_url,
                     "grammar_model": updated.grammar_model,
                     "general_model": updated.general_model,
+                    "analysis_model": updated.analysis_model,
                 }
             )
             self._config = updated
@@ -85,15 +95,30 @@ class ConfigManager:
                 ollama_base_url=updated.ollama_base_url,
                 grammar_model=updated.grammar_model,
                 general_model=updated.general_model,
+                analysis_model=updated.analysis_model,
             )
 
     def get_model_config(self, key: str) -> ModelConfig:
         config = self.get_runtime_config()
-        model_name = config.grammar_model if key == "grammar" else config.general_model
+        
+        if key == "grammar":
+            model_name = config.grammar_model
+            temperature = 0.1
+            max_tokens = 512
+            top_p = 0.95
+        elif key == "analysis":
+            model_name = config.analysis_model
+            temperature = 0.0  # Zero temperature for deterministic tool calls
+            max_tokens = 1024
+            top_p = 0.95
+        else: # general
+            model_name = config.general_model
+            temperature = 0.5
+            max_tokens = 768
+            top_p = 0.9
+
         endpoint = f"{config.ollama_base_url}/api/chat"
-        temperature = 0.1 if key == "grammar" else 0.5
-        max_tokens = 512 if key == "grammar" else 768
-        top_p = 0.95 if key == "grammar" else 0.9
+        
         return ModelConfig(
             name=model_name,
             endpoint=endpoint,

@@ -8,13 +8,14 @@ from pathlib import Path
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, status
 
-from app import schemas
+from app import __version__, schemas
 from app.config import settings
 from app.config_manager import ConfigManager
 from app.logging_utils import configure_logging, get_logger
 from app.models.client import ModelClientError
 from app.services.editing import EditResult, EditingService
 from app.services.grammar_check import GrammarCheckService
+from app.services.analysis import AnalysisService
 
 configure_logging(level=settings.log_level)
 logger = get_logger(__name__)
@@ -22,6 +23,7 @@ logger = get_logger(__name__)
 app = FastAPI(title="LocalScribe Backend")
 config_manager = ConfigManager(Path(settings.config_path))
 grammar_service = GrammarCheckService()
+analysis_service = AnalysisService(config_manager=config_manager, timeout=settings.request_timeout_seconds)
 
 
 @lru_cache(maxsize=1)
@@ -33,7 +35,11 @@ def get_editing_service() -> EditingService:
 @app.get("/health", response_model=schemas.HealthResponse)
 async def health() -> schemas.HealthResponse:
     """Simple health-check endpoint."""
-    return schemas.HealthResponse(status="ok", environment=settings.environment)
+    return schemas.HealthResponse(
+        status="ok",
+        environment=settings.environment,
+        version=__version__,
+    )
 
 
 @app.get("/runtime/config", response_model=schemas.RuntimeConfigResponse)
@@ -72,6 +78,12 @@ async def list_available_models() -> schemas.ModelListResponse:
 async def check_text(payload: schemas.CheckRequest) -> schemas.CheckResponse:
     """Check text for grammar errors using LanguageTool."""
     return grammar_service.check(payload.text, payload.language_tool_config)
+
+
+@app.post("/v1/text/analyze", response_model=schemas.AnalysisResponse)
+async def analyze_text(payload: schemas.AnalysisRequest) -> schemas.AnalysisResponse:
+    """Analyze text for semantic clarity using LLM."""
+    return await analysis_service.analyze(payload.text)
 
 
 @app.post("/v1/text/edit", response_model=schemas.EditResponse)

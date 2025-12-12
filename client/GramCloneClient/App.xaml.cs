@@ -17,5 +17,9 @@ public partial class App : WpfApplication
     private void OnExit(object sender, ExitEventArgs e)
     {
         _trayApp?.Dispose();
+
+        // Force exit - UI Automation COM threads can keep the process alive
+        // even after WPF shutdown completes
+        Environment.Exit(0);
     }
 }

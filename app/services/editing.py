@@ -54,7 +54,8 @@ class EditingService:
         )
 
         start = time.perf_counter()
-        output_text = await client.generate(messages)
+        response = await client.generate(messages)
+        output_text = response.content
         latency_ms = (time.perf_counter() - start) * 1000
 
         logger.debug(

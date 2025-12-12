@@ -122,6 +122,22 @@ public sealed class BackendClient : IDisposable
         return payload.Models;
     }
 
+    public async Task<HealthResponse> GetHealthAsync(
+        string? overrideBaseUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        string url = BuildUrl("/health", overrideBaseUrl);
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<HealthResponse>(url, cancellationToken);
+            return response ?? new HealthResponse { Status = "unknown", Version = "unknown" };
+        }
+        catch
+        {
+            return new HealthResponse { Status = "offline", Version = "unknown" };
+        }
+    }
+
     public async Task<CheckResponse> CheckTextAsync(
         string text,
         LanguageToolSettings? languageToolConfig = null,
@@ -157,6 +173,26 @@ public sealed class BackendClient : IDisposable
 
         var result = await response.Content.ReadFromJsonAsync<CheckResponse>(cancellationToken: cancellationToken);
         return result ?? new CheckResponse();
+    }
+
+    public async Task<AnalysisResponse> AnalyzeTextAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        string url = BuildUrl("/v1/text/analyze");
+        var payload = new { text };
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            // Analysis is optional/background, so maybe we shouldn't throw hard?
+            // But let's throw so the caller knows it failed.
+            string error = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException($"Analysis failed ({response.StatusCode}): {error}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<AnalysisResponse>(cancellationToken: cancellationToken);
+        return result ?? new AnalysisResponse();
     }
 
     public void Dispose() => _httpClient.Dispose();
