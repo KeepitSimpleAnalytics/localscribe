@@ -41,6 +41,11 @@ public sealed class AppSettings
     /// LanguageTool grammar checking configuration.
     /// </summary>
     public LanguageToolSettings LanguageTool { get; set; } = new();
+
+    /// <summary>
+    /// Enable developer diagnostics dashboard.
+    /// </summary>
+    public bool EnableDiagnostics { get; set; } = false;
 }
 
 /// <summary>

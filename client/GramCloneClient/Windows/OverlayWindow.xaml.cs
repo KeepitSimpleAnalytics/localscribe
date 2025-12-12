@@ -113,7 +113,7 @@ public partial class OverlayWindow : Window
     /// </summary>
     public void SetErrorRegions(
         List<(Rect Bounds, GrammarMatch Match)> grammarRegions,
-        List<(Rect Bounds, GrammarMatch Match)> analysisRegions = null)
+        List<(Rect Bounds, GrammarMatch Match)>? analysisRegions = null)
     {
         _errorRegions = new List<(Rect Bounds, GrammarMatch Match)>();
         

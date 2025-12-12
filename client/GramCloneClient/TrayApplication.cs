@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfApplication = System.Windows.Application;
@@ -28,6 +29,7 @@ public sealed class TrayApplication : IDisposable
     private readonly SettingsWindow _settingsWindow;
     private readonly BubbleWindow _bubbleWindow;
     private readonly OverlayWindow _overlayWindow = new();
+    private readonly DiagnosticsWindow _diagnosticsWindow = new(); // New Diagnostics Dashboard
     private readonly BackendProcessManager _processManager = new();
     private readonly TextFocusObserver _textObserver = new();
     private AboutWindow? _aboutWindow;
@@ -56,6 +58,7 @@ public sealed class TrayApplication : IDisposable
         _hotkeyListener.HotkeyPressed += OnHotkeyPressed;
 
         _textObserver.TextChanged += OnTextObserved;
+        _textObserver.DiagnosticsUpdated += OnDiagnosticsUpdated; // Wire up diagnostics
 
         // Initialize Debounce Timer with configurable delay from settings
         _debounceTimer = new DispatcherTimer();
@@ -66,6 +69,7 @@ public sealed class TrayApplication : IDisposable
 
         _trayIconService = new TrayIconService(
             onShowSettings: ShowSettings,
+            onShowDiagnostics: ShowDiagnostics,
             onShowAbout: ShowAbout,
             onExit: () => WpfApplication.Current.Shutdown()
         );
@@ -103,7 +107,8 @@ public sealed class TrayApplication : IDisposable
 
         try
         {
-            _trayIconService.Initialize();
+            // Initialize tray menu based on settings
+            _trayIconService.Initialize(_settings.EnableDiagnostics);
         }
         catch (Exception ex)
         {
@@ -192,6 +197,13 @@ public sealed class TrayApplication : IDisposable
 
     private void OnTextObserved(object? sender, (string Text, Rect ElementBounds, Rect CaretBounds) args)
     {
+        // Update diagnostics dashboard if open
+        if (_diagnosticsWindow.IsVisible)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(() => 
+                _diagnosticsWindow.UpdateTextMetrics(args.Text));
+        }
+
         // Marshal to UI thread since this callback comes from UI Automation thread
         WpfApplication.Current.Dispatcher.BeginInvoke(() =>
         {
@@ -213,10 +225,30 @@ public sealed class TrayApplication : IDisposable
         });
     }
 
+    private void OnDiagnosticsUpdated(object? sender, TextFocusObserver.FocusDiagnostics e)
+    {
+        if (_diagnosticsWindow.IsVisible)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(() => 
+                _diagnosticsWindow.UpdateFocusInfo(e.ProcessName, e.ControlType, e.HasTextPattern, e.Bounds));
+        }
+    }
+
     private async void OnDebounceTimerTick(object? sender, EventArgs e)
     {
         _debounceTimer.Stop();
         string text = _pendingTextToCheck;
+
+        // Diagnostics Health Check (Ping backend if diagnostics window is open)
+        if (_diagnosticsWindow.IsVisible)
+        {
+            try {
+                var health = await _backendClient.GetHealthAsync();
+                _diagnosticsWindow.UpdateHealth(health.Status == "ok", true); // Ollama check separate later
+            } catch {
+                _diagnosticsWindow.UpdateHealth(false, false);
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(text) || text.Length < 5)
         {
@@ -228,6 +260,7 @@ public sealed class TrayApplication : IDisposable
         try
         {
             Logger.Log($"Checking text ({text.Length} chars)...");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Checking text: {text.Length} chars");
             
             // Start tasks in parallel
             var grammarTask = _backendClient.CheckTextAsync(text, _settings.LanguageTool);
@@ -257,11 +290,13 @@ public sealed class TrayApplication : IDisposable
                     else
                     {
                         Logger.Log("Analysis timed out (2s limit)");
+                        if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog("Analysis timed out");
                     }
                 }
                 catch (Exception ex)
                 {
                     Logger.Log($"Analysis failed: {ex.Message}");
+                    if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Analysis failed: {ex.Message}");
                 }
             }
 
@@ -269,13 +304,14 @@ public sealed class TrayApplication : IDisposable
             int totalAnalysisIssues = analysisResponse?.Issues.Count ?? 0;
             
             Logger.Log($"Check Result: {totalErrors} grammar errors, {totalAnalysisIssues} analysis issues.");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Result: {totalErrors} errors, {totalAnalysisIssues} analysis issues");
 
             // Limit to first 20 errors to prevent overwhelming the overlay
             const int maxErrors = 20;
             var limitedMatches = grammarResponse.Matches.Take(maxErrors).ToList();
             bool hasMoreErrors = totalErrors > maxErrors;
 
-            _bubbleWindow.UpdateState(limitedMatches, hasMoreErrors ? $"{maxErrors}+" : null);
+            _bubbleWindow.UpdateState(limitedMatches, hasMoreErrors ? "{maxErrors}+" : null);
 
             // Prefer caret bounds if available, otherwise use element bounds
             Rect targetRect = _pendingCaretBounds != Rect.Empty ? _pendingCaretBounds : _pendingBounds;
@@ -331,6 +367,7 @@ public sealed class TrayApplication : IDisposable
                 }
                 else
                 {
+                    if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog("WARN: Errors found but 0 rects (TextPattern issue?)");
                     _overlayWindow.HideOverlay();
                 }
             }
@@ -343,6 +380,7 @@ public sealed class TrayApplication : IDisposable
         catch (Exception ex)
         {
             Logger.Log($"Check/Analysis loop failed: {ex.Message}");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Error: {ex.Message}");
             _bubbleWindow.Hide();
             _overlayWindow.HideOverlay();
         }
@@ -353,6 +391,12 @@ public sealed class TrayApplication : IDisposable
         _settingsWindow.Show();
         _settingsWindow.Activate();
         _ = _settingsWindow.RefreshBackendDataAsync();
+    }
+
+    private void ShowDiagnostics()
+    {
+        _diagnosticsWindow.Show();
+        _diagnosticsWindow.Activate();
     }
 
     private void ShowAbout()
@@ -397,6 +441,9 @@ public sealed class TrayApplication : IDisposable
 
         // Apply text observer polling interval
         _textObserver.SetPollingInterval(_settings.Timing.TextPollingIntervalMs);
+        
+        // Update tray menu visibility
+        _trayIconService.UpdateMenu(_settings.EnableDiagnostics);
 
         _editorWindow.ApplySettings(_settings);
         _settingsWindow.UpdateSettings(_settings);
@@ -425,6 +472,8 @@ public sealed class TrayApplication : IDisposable
         try
         {
             Logger.Log($"Replacement requested: '{args.Match.Context}' -> '{args.Replacement}'");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Replacing: {args.Match.Context} -> {args.Replacement}");
+            
             _textObserver.ReplaceText(args.Match.Offset, args.Match.Length, args.Replacement);
             Logger.Log("Replacement successful");
 
@@ -434,6 +483,7 @@ public sealed class TrayApplication : IDisposable
         catch (Exception ex)
         {
             Logger.Log($"Replacement failed: {ex.Message}");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Replace failed: {ex.Message}");
         }
     }
 
@@ -446,6 +496,7 @@ public sealed class TrayApplication : IDisposable
         _textObserver.Dispose();
         _bubbleWindow.Close();
         _overlayWindow.Close();
+        _diagnosticsWindow.Close(); // Close dashboard
         _aboutWindow?.Close();
     }
 }

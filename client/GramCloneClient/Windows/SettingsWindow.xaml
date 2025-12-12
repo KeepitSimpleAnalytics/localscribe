@@ -242,6 +242,16 @@
                 </StackPanel>
             </Expander>
 
+            <!-- 7. Advanced -->
+            <Expander Header="Advanced" IsExpanded="False" Margin="0,0,0,8">
+                <StackPanel Margin="20,8,0,0">
+                    <CheckBox x:Name="DiagnosticsCheckBox" Content="Enable Developer Diagnostics Dashboard"
+                              Margin="0,0,0,8"/>
+                    <TextBlock Text="(Requires restart to show/hide tray menu item)"
+                               FontStyle="Italic" Foreground="{DynamicResource SecondaryText}" FontSize="10"/>
+                </StackPanel>
+            </Expander>
+
             <!-- Save/Cancel (always visible) -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
                 <Button Content="Save" Width="80" Margin="0,0,8,0" Click="SaveButton_OnClick"/>
