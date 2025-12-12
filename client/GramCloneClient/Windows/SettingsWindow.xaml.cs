@@ -75,6 +75,9 @@ public partial class SettingsWindow : Window
         DebounceValueText.Text = _settings.Timing.DebounceDelayMs.ToString();
         PollingSlider.Value = _settings.Timing.TextPollingIntervalMs;
         PollingValueText.Text = _settings.Timing.TextPollingIntervalMs.ToString();
+        
+        // Load Advanced settings
+        DiagnosticsCheckBox.IsChecked = _settings.EnableDiagnostics;
 
         // Load LanguageTool settings
         GrammarPresetCombo.SelectedItem = _settings.LanguageTool.Preset;
@@ -203,6 +206,9 @@ public partial class SettingsWindow : Window
         // Save timing settings
         _settings.Timing.DebounceDelayMs = (int)DebounceSlider.Value;
         _settings.Timing.TextPollingIntervalMs = (int)PollingSlider.Value;
+
+        // Save Advanced settings
+        _settings.EnableDiagnostics = DiagnosticsCheckBox.IsChecked ?? false;
 
         string grammarModel = (GrammarModelCombo.Text ?? string.Empty).Trim();
         string generalModel = (GeneralModelCombo.Text ?? string.Empty).Trim();
