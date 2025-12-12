@@ -1,14 +1,6 @@
 """Service for semantic analysis using LLM Tool Use."""
 
-from __future__ import annotations
-
-import time
-import logging
-from typing import Any
-
-from app.config_manager import ConfigManager
-from app.models.client import ModelClient
-from app.schemas import AnalysisResponse, AnalysisIssue
+from app.config import settings # Import global settings
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +49,10 @@ CLARITY_TOOL = {
 class AnalysisService:
     """Service for semantic text analysis."""
 
-    def __init__(self, *, config_manager: ConfigManager, timeout: float) -> None:
+    def __init__(self, *, config_manager: ConfigManager, timeout: float, settings_obj) -> None:
         self._config_manager = config_manager
         self._timeout = timeout
+        self._settings = settings_obj # Store the settings object
 
     async def analyze(self, text: str) -> AnalysisResponse:
         """Analyze text for semantic clarity issues."""
@@ -124,9 +117,14 @@ class AnalysisService:
 
         start = time.perf_counter()
         
+        if self._settings.log_content_enabled:
+            logger.info(f"LLM Input Messages: {messages}")
+
         try:
             # Call the model with the tool definition
             response = await client.generate(messages, tools=[CLARITY_TOOL])
+            if self._settings.log_content_enabled:
+                logger.info(f"LLM Raw Response: {response}") # Log the full ModelResponse object
         except Exception as e:
             logger.error(f"Analysis model call failed: {e}")
             return AnalysisResponse(issues=[], latency_ms=0.0)
