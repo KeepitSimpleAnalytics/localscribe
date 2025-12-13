@@ -61,7 +61,7 @@ public partial class DiagnosticsWindow : Window
 
     public void AppendLog(string message)
     {
-        string timestamp = DateTime.Now.Now.ToString("HH:mm:ss");
+        string timestamp = DateTime.Now.ToString("HH:mm:ss");
         LogBox.AppendText("[" + timestamp + "] " + message + "\n");
         LogBox.ScrollToEnd();
     }

@@ -195,5 +195,25 @@ public sealed class BackendClient : IDisposable
         return result ?? new AnalysisResponse();
     }
 
+    /// <summary>
+    /// Sends a warmup request to load the model into Ollama memory.
+    /// Fire-and-forget, does not throw on failure.
+    /// </summary>
+    public async Task WarmupModelAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string url = BuildUrl("/runtime/warmup");
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(10)); // Long timeout for model loading
+            using HttpResponseMessage response = await _httpClient.PostAsync(url, null, cts.Token);
+            // Don't check success - warmup is best-effort
+        }
+        catch
+        {
+            // Silently ignore warmup failures
+        }
+    }
+
     public void Dispose() => _httpClient.Dispose();
 }

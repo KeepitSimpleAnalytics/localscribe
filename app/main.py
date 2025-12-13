@@ -74,6 +74,34 @@ async def list_available_models() -> schemas.ModelListResponse:
     return schemas.ModelListResponse(models=models)
 
 
+@app.post("/runtime/warmup")
+async def warmup_model() -> dict:
+    """Send a minimal request to Ollama to load the model into memory."""
+    config = config_manager.get_runtime_config()
+    url = f"{config.ollama_base_url}/api/generate"
+
+    # Minimal request to trigger model loading
+    payload = {
+        "model": config.grammar_model,
+        "prompt": "",
+        "stream": False,
+        "options": {"num_predict": 1}
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+        logger.info(f"Model warmup complete: {config.grammar_model}")
+        return {"status": "ok", "model": config.grammar_model}
+    except httpx.HTTPError as exc:
+        logger.warning(f"Model warmup failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Warmup failed: {exc}",
+        ) from exc
+
+
 @app.post("/v1/text/check", response_model=schemas.CheckResponse)
 async def check_text(payload: schemas.CheckRequest) -> schemas.CheckResponse:
     """Check text for grammar errors using LanguageTool."""

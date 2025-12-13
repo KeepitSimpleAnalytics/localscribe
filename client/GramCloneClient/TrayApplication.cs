@@ -42,6 +42,10 @@ public sealed class TrayApplication : IDisposable
 
     private IntPtr _lastFocusedHandle;
 
+    // Model warmup state
+    private bool _isWarmingUp;
+    private DateTime _lastWarmupTime = DateTime.MinValue;
+
     public TrayApplication()
     {
         _settings = _settingsService.Load();
@@ -200,9 +204,12 @@ public sealed class TrayApplication : IDisposable
         // Update diagnostics dashboard if open
         if (_diagnosticsWindow.IsVisible)
         {
-            WpfApplication.Current.Dispatcher.Invoke(() => 
+            WpfApplication.Current.Dispatcher.Invoke(() =>
                 _diagnosticsWindow.UpdateTextMetrics(args.Text));
         }
+
+        // Trigger model warmup if not recently done (keeps Ollama model loaded)
+        TriggerWarmupIfNeeded();
 
         // Marshal to UI thread since this callback comes from UI Automation thread
         WpfApplication.Current.Dispatcher.BeginInvoke(() =>
@@ -222,6 +229,35 @@ public sealed class TrayApplication : IDisposable
 
             _debounceTimer.Stop();
             _debounceTimer.Start(); // Restart timer
+        });
+    }
+
+    private void TriggerWarmupIfNeeded()
+    {
+        // Only warm up if we haven't done so in the last 5 minutes
+        if (_isWarmingUp || (DateTime.Now - _lastWarmupTime).TotalMinutes < 5)
+        {
+            return;
+        }
+
+        _isWarmingUp = true;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Logger.Log("Warming up Ollama model...");
+                await _backendClient.WarmupModelAsync();
+                _lastWarmupTime = DateTime.Now;
+                Logger.Log("Model warmup complete");
+            }
+            catch
+            {
+                // Ignore warmup failures
+            }
+            finally
+            {
+                _isWarmingUp = false;
+            }
         });
     }
 
@@ -279,17 +315,17 @@ public sealed class TrayApplication : IDisposable
             AnalysisResponse? analysisResponse = null;
             if (analysisTask != null)
             {
-                try 
+                try
                 {
-                    // Don't block too long on analysis
-                    var completedTask = await Task.WhenAny(analysisTask, Task.Delay(2000));
+                    // Allow time for local LLM analysis
+                    var completedTask = await Task.WhenAny(analysisTask, Task.Delay(30000));
                     if (completedTask == analysisTask)
                     {
                         analysisResponse = await analysisTask;
                     }
                     else
                     {
-                        Logger.Log("Analysis timed out (2s limit)");
+                        Logger.Log("Analysis timed out (30s limit)");
                         if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog("Analysis timed out");
                     }
                 }

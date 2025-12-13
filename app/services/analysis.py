@@ -1,6 +1,11 @@
 """Service for semantic analysis using LLM Tool Use."""
 
-from app.config import settings # Import global settings
+import logging
+import time
+
+from app.config_manager import ConfigManager
+from app.models.client import ModelClient
+from app.schemas import AnalysisResponse, AnalysisIssue
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +54,9 @@ CLARITY_TOOL = {
 class AnalysisService:
     """Service for semantic text analysis."""
 
-    def __init__(self, *, config_manager: ConfigManager, timeout: float, settings) -> None:
+    def __init__(self, *, config_manager: ConfigManager, timeout: float) -> None:
         self._config_manager = config_manager
         self._timeout = timeout
-        self._settings = settings # Store the settings object
 
     async def analyze(self, text: str) -> AnalysisResponse:
         """Analyze text for semantic clarity issues."""
@@ -61,7 +65,7 @@ class AnalysisService:
 
         messages = [
             {
-                "role": "system", 
+                "role": "system",
                 "content": (
                     "You are a highly critical and precise semantic editor. Your task is to analyze the provided text ONLY for clarity and readability issues. "
                     "Specifically identify and report: "
@@ -77,7 +81,7 @@ class AnalysisService:
             },
             # Few-shot example
             {
-                "role": "user", 
+                "role": "user",
                 "content": "It is anticipated that a decision will be made by us at some point in time. The situation was being evaluated."
             },
             {
@@ -116,21 +120,17 @@ class AnalysisService:
         ]
 
         start = time.perf_counter()
-        
-        if self._settings.log_content_enabled:
-            logger.info(f"LLM Input Messages: {messages}")
+        logger.info(f"Analysis starting | model={model_config.name} text_len={len(text)}")
 
         try:
-            # Call the model with the tool definition
             response = await client.generate(messages, tools=[CLARITY_TOOL])
-            if self._settings.log_content_enabled:
-                logger.info(f"LLM Raw Response: {response}") # Log the full ModelResponse object
+            logger.info(f"Analysis LLM responded in {(time.perf_counter() - start)*1000:.0f}ms")
         except Exception as e:
-            logger.error(f"Analysis model call failed: {e}")
+            logger.error(f"Analysis model call failed after {(time.perf_counter() - start)*1000:.0f}ms: {e}")
             return AnalysisResponse(issues=[], latency_ms=0.0)
 
         latency_ms = (time.perf_counter() - start) * 1000
-        
+
         issues: list[AnalysisIssue] = []
 
         if response.tool_calls:
@@ -138,20 +138,20 @@ class AnalysisService:
             for tool_call in response.tool_calls:
                 if tool_call.name == "report_clarity_issues":
                     raw_issues = tool_call.arguments.get("issues", [])
-                    
+
                     for item in raw_issues:
                         quoted = item.get("quoted_text", "")
                         issue_type = item.get("issue_type", "complexity")
                         suggestion = item.get("suggestion", "")
                         confidence = float(item.get("confidence", 1.0))
-                        
+
                         if not quoted or not suggestion:
                             logger.warning(f"Malformed issue from LLM: quoted_text='{quoted}', suggestion='{suggestion}'")
                             continue
 
                         # Find exact position in text
                         offset = text.find(quoted)
-                        
+
                         if offset != -1:
                             issues.append(AnalysisIssue(
                                 offset=offset,
