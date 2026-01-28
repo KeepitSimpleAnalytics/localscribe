@@ -250,9 +250,9 @@ public sealed class TrayApplication : IDisposable
                 _lastWarmupTime = DateTime.Now;
                 Logger.Log("Model warmup complete");
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore warmup failures
+                Logger.Log($"Model warmup failed: {ex.Message}");
             }
             finally
             {
@@ -280,9 +280,13 @@ public sealed class TrayApplication : IDisposable
         {
             try {
                 var health = await _backendClient.GetHealthAsync();
-                _diagnosticsWindow.UpdateHealth(health.Status == "ok", true); // Ollama check separate later
+                _diagnosticsWindow.UpdateHealth(
+                    health.Status == "ok",
+                    true, // Ollama check separate later
+                    health.LanguageToolStatus,
+                    health.LanguageToolError);
             } catch {
-                _diagnosticsWindow.UpdateHealth(false, false);
+                _diagnosticsWindow.UpdateHealth(false, false, "unknown", "Backend unreachable");
             }
         }
 
@@ -347,7 +351,7 @@ public sealed class TrayApplication : IDisposable
             var limitedMatches = grammarResponse.Matches.Take(maxErrors).ToList();
             bool hasMoreErrors = totalErrors > maxErrors;
 
-            _bubbleWindow.UpdateState(limitedMatches, hasMoreErrors ? "{maxErrors}+" : null);
+            _bubbleWindow.UpdateState(limitedMatches, hasMoreErrors ? $"{maxErrors}+" : null);
 
             // Prefer caret bounds if available, otherwise use element bounds
             Rect targetRect = _pendingCaretBounds != Rect.Empty ? _pendingCaretBounds : _pendingBounds;

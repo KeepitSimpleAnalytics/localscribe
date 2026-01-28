@@ -127,7 +127,7 @@ class AnalysisService:
             logger.info(f"Analysis LLM responded in {(time.perf_counter() - start)*1000:.0f}ms")
         except Exception as e:
             logger.error(f"Analysis model call failed after {(time.perf_counter() - start)*1000:.0f}ms: {e}")
-            return AnalysisResponse(issues=[], latency_ms=0.0)
+            raise  # Propagate error to caller instead of silent empty response
 
         latency_ms = (time.perf_counter() - start) * 1000
 

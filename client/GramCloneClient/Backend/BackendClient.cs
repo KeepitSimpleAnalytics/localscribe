@@ -132,9 +132,15 @@ public sealed class BackendClient : IDisposable
             var response = await _httpClient.GetFromJsonAsync<HealthResponse>(url, cancellationToken);
             return response ?? new HealthResponse { Status = "unknown", Version = "unknown" };
         }
-        catch
+        catch (Exception ex)
         {
-            return new HealthResponse { Status = "offline", Version = "unknown" };
+            return new HealthResponse
+            {
+                Status = "offline",
+                Version = "unknown",
+                LanguageToolStatus = "unknown",
+                LanguageToolError = $"Backend unreachable: {ex.Message}"
+            };
         }
     }
 
@@ -197,21 +203,18 @@ public sealed class BackendClient : IDisposable
 
     /// <summary>
     /// Sends a warmup request to load the model into Ollama memory.
-    /// Fire-and-forget, does not throw on failure.
+    /// Throws on failure so caller can log/handle appropriately.
     /// </summary>
     public async Task WarmupModelAsync(CancellationToken cancellationToken = default)
     {
-        try
+        string url = BuildUrl("/runtime/warmup");
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromMinutes(10)); // Long timeout for model loading
+        using HttpResponseMessage response = await _httpClient.PostAsync(url, null, cts.Token);
+        if (!response.IsSuccessStatusCode)
         {
-            string url = BuildUrl("/runtime/warmup");
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(10)); // Long timeout for model loading
-            using HttpResponseMessage response = await _httpClient.PostAsync(url, null, cts.Token);
-            // Don't check success - warmup is best-effort
-        }
-        catch
-        {
-            // Silently ignore warmup failures
+            string error = await response.Content.ReadAsStringAsync(cts.Token);
+            throw new InvalidOperationException($"Warmup failed ({response.StatusCode}): {error}");
         }
     }
 

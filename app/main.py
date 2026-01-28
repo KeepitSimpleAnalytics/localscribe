@@ -35,10 +35,14 @@ def get_editing_service() -> EditingService:
 @app.get("/health", response_model=schemas.HealthResponse)
 async def health() -> schemas.HealthResponse:
     """Simple health-check endpoint."""
+    lt_status = "ok" if grammar_service.is_enabled() else "disabled"
+    lt_error = grammar_service.get_init_error()
     return schemas.HealthResponse(
         status="ok",
         environment=settings.environment,
         version=__version__,
+        language_tool_status=lt_status,
+        language_tool_error=lt_error,
     )
 
 
@@ -111,7 +115,14 @@ async def check_text(payload: schemas.CheckRequest) -> schemas.CheckResponse:
 @app.post("/v1/text/analyze", response_model=schemas.AnalysisResponse)
 async def analyze_text(payload: schemas.AnalysisRequest) -> schemas.AnalysisResponse:
     """Analyze text for semantic clarity using LLM."""
-    return await analysis_service.analyze(payload.text)
+    try:
+        return await analysis_service.analyze(payload.text)
+    except Exception as exc:
+        logger.exception("Analysis failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Analysis failed: {exc}",
+        ) from exc
 
 
 @app.post("/v1/text/edit", response_model=schemas.EditResponse)

@@ -15,4 +15,10 @@ public class HealthResponse
 
     [JsonPropertyName("version")]
     public string Version { get; set; } = "";
+
+    [JsonPropertyName("language_tool_status")]
+    public string LanguageToolStatus { get; set; } = "unknown";
+
+    [JsonPropertyName("language_tool_error")]
+    public string? LanguageToolError { get; set; }
 }

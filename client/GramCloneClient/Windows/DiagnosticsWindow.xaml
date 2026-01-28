@@ -88,6 +88,10 @@
                     <Ellipse x:Name="OllamaStatusDot" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0"/>
                     <TextBlock x:Name="OllamaStatusText" Text="Ollama: Checking..." Foreground="{DynamicResource WindowForeground}"/>
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Ellipse x:Name="LanguageToolStatusDot" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="LanguageToolStatusText" Text="LanguageTool: Checking..." Foreground="{DynamicResource WindowForeground}"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

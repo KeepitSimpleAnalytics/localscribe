@@ -13,25 +13,35 @@ class GrammarCheckService:
     def __init__(self) -> None:
         logger.info(f"Python process PATH: {os.environ.get('PATH')}")
         logger.info(f"Python process JAVA_HOME: {os.environ.get('JAVA_HOME')}")
+        self._init_error: str | None = None
         try:
             self._tool = language_tool_python.LanguageTool("en-US")
             self._enabled = True
         except Exception as e:
+            self._init_error = str(e)
             logger.warning(f"Failed to initialize LanguageTool (Java likely missing): {e}")
             self._tool = None
             self._enabled = False
+
+    def is_enabled(self) -> bool:
+        """Return whether LanguageTool is active."""
+        return self._enabled
+
+    def get_init_error(self) -> str | None:
+        """Return initialization error message, if any."""
+        return self._init_error
 
     def check(
         self, text: str, config: LanguageToolConfig | None = None
     ) -> CheckResponse:
         if not self._enabled or not self._tool:
-            return CheckResponse(matches=[])
+            return CheckResponse(matches=[], error=self._init_error or "LanguageTool not initialized")
 
         try:
             matches = self._tool.check(text)
         except Exception as e:
             logger.error(f"Error during grammar check: {e}")
-            return CheckResponse(matches=[])
+            return CheckResponse(matches=[], error=f"Grammar check failed: {e}")
 
         # Build set of disabled categories for filtering
         disabled_categories: set[str] = set()

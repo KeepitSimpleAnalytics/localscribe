@@ -66,13 +66,29 @@ public partial class DiagnosticsWindow : Window
         LogBox.ScrollToEnd();
     }
 
-    public void UpdateHealth(bool backendOk, bool ollamaOk)
+    public void UpdateHealth(bool backendOk, bool ollamaOk, string languageToolStatus = "unknown", string? languageToolError = null)
     {
         BackendStatusDot.Fill = backendOk ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.Red;
         BackendStatusText.Text = backendOk ? "Backend: Connected" : "Backend: Disconnected";
 
         OllamaStatusDot.Fill = ollamaOk ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.Red;
         OllamaStatusText.Text = ollamaOk ? "Ollama: Connected" : "Ollama: Unreachable";
+
+        // LanguageTool status
+        bool ltOk = languageToolStatus == "ok";
+        LanguageToolStatusDot.Fill = ltOk ? System.Windows.Media.Brushes.LightGreen : System.Windows.Media.Brushes.Red;
+        if (ltOk)
+        {
+            LanguageToolStatusText.Text = "LanguageTool: Active";
+        }
+        else if (!string.IsNullOrEmpty(languageToolError))
+        {
+            LanguageToolStatusText.Text = $"LanguageTool: {languageToolError}";
+        }
+        else
+        {
+            LanguageToolStatusText.Text = $"LanguageTool: {languageToolStatus}";
+        }
     }
 
     private int CountWords(string text)

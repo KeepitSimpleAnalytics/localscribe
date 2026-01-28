@@ -16,6 +16,8 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     version: str
+    language_tool_status: str = "unknown"
+    language_tool_error: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -127,6 +129,7 @@ class CheckResponse(BaseModel):
     """Response payload for grammar checking."""
 
     matches: list[GrammarError]
+    error: str | None = None
 
 
 class ModelListResponse(BaseModel):
