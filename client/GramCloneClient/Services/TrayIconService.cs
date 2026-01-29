@@ -12,17 +12,22 @@ namespace GramCloneClient.Services;
 public sealed class TrayIconService : IDisposable
 {
     private readonly Action _onShowSettings;
+    private readonly Action _onShowDiagnostics;
+    private readonly Action _onShowAbout;
     private readonly Action _onExit;
     private NotifyIcon? _notifyIcon;
     private Icon? _customIcon;
+    private ToolStripMenuItem? _diagnosticsItem;
 
-    public TrayIconService(Action onShowSettings, Action onExit)
+    public TrayIconService(Action onShowSettings, Action onShowDiagnostics, Action onShowAbout, Action onExit)
     {
         _onShowSettings = onShowSettings;
+        _onShowDiagnostics = onShowDiagnostics;
+        _onShowAbout = onShowAbout;
         _onExit = onExit;
     }
 
-    public void Initialize()
+    public void Initialize(bool showDiagnostics = false)
     {
         _customIcon = LoadOrCreateIcon();
 
@@ -31,8 +36,16 @@ public sealed class TrayIconService : IDisposable
             Icon = _customIcon ?? SystemIcons.Information,
             Text = "LocalScribe Assistant",
             Visible = true,
-            ContextMenuStrip = BuildContextMenu()
+            ContextMenuStrip = BuildContextMenu(showDiagnostics)
         };
+    }
+    
+    public void UpdateMenu(bool showDiagnostics)
+    {
+        if (_diagnosticsItem != null)
+        {
+            _diagnosticsItem.Visible = showDiagnostics;
+        }
     }
 
     /// <summary>
@@ -145,10 +158,16 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    private ContextMenuStrip BuildContextMenu()
+    private ContextMenuStrip BuildContextMenu(bool showDiagnostics)
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Settings...", null, (_, _) => _onShowSettings());
+        
+        _diagnosticsItem = new ToolStripMenuItem("Diagnostics...", null, (_, _) => _onShowDiagnostics());
+        _diagnosticsItem.Visible = showDiagnostics;
+        menu.Items.Add(_diagnosticsItem);
+        
+        menu.Items.Add("About...", null, (_, _) => _onShowAbout());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => _onExit());
         return menu;

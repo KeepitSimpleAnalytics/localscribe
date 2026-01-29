@@ -8,13 +8,14 @@ from pathlib import Path
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, status
 
-from app import schemas
+from app import __version__, schemas
 from app.config import settings
 from app.config_manager import ConfigManager
 from app.logging_utils import configure_logging, get_logger
 from app.models.client import ModelClientError
 from app.services.editing import EditResult, EditingService
 from app.services.grammar_check import GrammarCheckService
+from app.services.analysis import AnalysisService
 
 configure_logging(level=settings.log_level)
 logger = get_logger(__name__)
@@ -22,6 +23,7 @@ logger = get_logger(__name__)
 app = FastAPI(title="LocalScribe Backend")
 config_manager = ConfigManager(Path(settings.config_path))
 grammar_service = GrammarCheckService()
+analysis_service = AnalysisService(config_manager=config_manager, timeout=settings.request_timeout_seconds)
 
 
 @lru_cache(maxsize=1)
@@ -33,7 +35,15 @@ def get_editing_service() -> EditingService:
 @app.get("/health", response_model=schemas.HealthResponse)
 async def health() -> schemas.HealthResponse:
     """Simple health-check endpoint."""
-    return schemas.HealthResponse(status="ok", environment=settings.environment)
+    lt_status = "ok" if grammar_service.is_enabled() else "disabled"
+    lt_error = grammar_service.get_init_error()
+    return schemas.HealthResponse(
+        status="ok",
+        environment=settings.environment,
+        version=__version__,
+        language_tool_status=lt_status,
+        language_tool_error=lt_error,
+    )
 
 
 @app.get("/runtime/config", response_model=schemas.RuntimeConfigResponse)
@@ -68,10 +78,51 @@ async def list_available_models() -> schemas.ModelListResponse:
     return schemas.ModelListResponse(models=models)
 
 
+@app.post("/runtime/warmup")
+async def warmup_model() -> dict:
+    """Send a minimal request to Ollama to load the model into memory."""
+    config = config_manager.get_runtime_config()
+    url = f"{config.ollama_base_url}/api/generate"
+
+    # Minimal request to trigger model loading
+    payload = {
+        "model": config.grammar_model,
+        "prompt": "",
+        "stream": False,
+        "options": {"num_predict": 1}
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+        logger.info(f"Model warmup complete: {config.grammar_model}")
+        return {"status": "ok", "model": config.grammar_model}
+    except httpx.HTTPError as exc:
+        logger.warning(f"Model warmup failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Warmup failed: {exc}",
+        ) from exc
+
+
 @app.post("/v1/text/check", response_model=schemas.CheckResponse)
 async def check_text(payload: schemas.CheckRequest) -> schemas.CheckResponse:
     """Check text for grammar errors using LanguageTool."""
     return grammar_service.check(payload.text, payload.language_tool_config)
+
+
+@app.post("/v1/text/analyze", response_model=schemas.AnalysisResponse)
+async def analyze_text(payload: schemas.AnalysisRequest) -> schemas.AnalysisResponse:
+    """Analyze text for semantic clarity using LLM."""
+    try:
+        return await analysis_service.analyze(payload.text)
+    except Exception as exc:
+        logger.exception("Analysis failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Analysis failed: {exc}",
+        ) from exc
 
 
 @app.post("/v1/text/edit", response_model=schemas.EditResponse)

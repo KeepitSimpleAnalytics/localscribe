@@ -45,9 +45,13 @@ public partial class ErrorTooltipWindow : Window
                 if (match.OffsetInContext > 0)
                     ContextText.Inlines.Add(new Run(match.Context.Substring(0, match.OffsetInContext)));
 
+                // Use theme-aware error highlight color
+                var errorHighlightBrush = TryFindResource("ErrorBackground") as System.Windows.Media.Brush
+                    ?? new SolidColorBrush(Color.FromRgb(255, 200, 200));
+
                 var errorRun = new Run(match.Context.Substring(match.OffsetInContext, match.Length))
                 {
-                    Background = new SolidColorBrush(Color.FromRgb(255, 200, 200)),
+                    Background = errorHighlightBrush,
                     FontWeight = FontWeights.Bold
                 };
                 ContextText.Inlines.Add(errorRun);
@@ -68,6 +72,13 @@ public partial class ErrorTooltipWindow : Window
 
         // Set suggestions as clickable buttons
         SuggestionsList.Items.Clear();
+
+        // Get theme-aware colors for suggestion buttons
+        var linkBrush = TryFindResource("InfoColor") as System.Windows.Media.Brush
+            ?? new SolidColorBrush(Color.FromRgb(33, 150, 243));
+        var hoverBrush = TryFindResource("HoverBackground") as System.Windows.Media.Brush
+            ?? new SolidColorBrush(Color.FromRgb(230, 245, 255));
+
         foreach (var suggestion in match.Replacements)
         {
             var btn = new Button
@@ -76,7 +87,7 @@ public partial class ErrorTooltipWindow : Window
                 Tag = suggestion,
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                Foreground = new SolidColorBrush(Color.FromRgb(33, 150, 243)),
+                Foreground = linkBrush,
                 FontStyle = FontStyles.Italic,
                 FontSize = 11,
                 Cursor = Cursors.Hand,
@@ -85,8 +96,8 @@ public partial class ErrorTooltipWindow : Window
             };
             btn.Click += OnSuggestionClicked;
 
-            // Add hover effect
-            btn.MouseEnter += (s, e) => btn.Background = new SolidColorBrush(Color.FromRgb(230, 245, 255));
+            // Add hover effect with theme-aware color
+            btn.MouseEnter += (s, e) => btn.Background = hoverBrush;
             btn.MouseLeave += (s, e) => btn.Background = Brushes.Transparent;
 
             SuggestionsList.Items.Add(btn);

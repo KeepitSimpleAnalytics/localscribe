@@ -27,6 +27,7 @@ namespace GramCloneClient.Services
         private int _pollingIntervalMs = 150;
 
         public event EventHandler<(string Text, Rect ElementBounds, Rect CaretBounds)>? TextChanged;
+        public event EventHandler<FocusDiagnostics>? DiagnosticsUpdated;
 
         public TextFocusObserver()
         {
@@ -42,6 +43,113 @@ namespace GramCloneClient.Services
             // Clamp to safe range
             _pollingIntervalMs = Math.Max(100, Math.Min(500, intervalMs));
             Logger.Log($"TextFocusObserver: Polling interval set to {_pollingIntervalMs}ms");
+        }
+
+        /// <summary>
+        /// Determines if a Document control type is editable.
+        /// Uses multiple detection strategies to filter out read-only web pages
+        /// while keeping editable documents (Word, Google Docs, etc.) working.
+        /// </summary>
+        private bool IsDocumentEditable(AutomationElement element)
+        {
+            try
+            {
+                // Strategy 1: Check TextPattern.IsReadOnlyAttribute (most reliable for documents)
+                if (element.TryGetCurrentPattern(TextPattern.Pattern, out var textPatternObj))
+                {
+                    var textPattern = (TextPattern)textPatternObj;
+                    var documentRange = textPattern.DocumentRange;
+
+                    object isReadOnlyAttr = documentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
+
+                    if (isReadOnlyAttr == TextPattern.MixedAttributeValue)
+                    {
+                        // Document has both read-only and editable regions (e.g., contenteditable in page)
+                        Logger.Log("IsDocumentEditable: MixedAttributeValue - treating as editable");
+                        return true;
+                    }
+                    else if (isReadOnlyAttr != AutomationElement.NotSupported && isReadOnlyAttr is bool isReadOnly)
+                    {
+                        Logger.Log($"IsDocumentEditable: TextPattern.IsReadOnlyAttribute = {isReadOnly}");
+                        return !isReadOnly;
+                    }
+                }
+
+                // Strategy 2: Check ValuePattern.IsReadOnly (fallback for some controls)
+                if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObj))
+                {
+                    var valuePattern = (ValuePattern)valuePatternObj;
+                    bool isReadOnly = valuePattern.Current.IsReadOnly;
+                    Logger.Log($"IsDocumentEditable: ValuePattern.IsReadOnly = {isReadOnly}");
+                    return !isReadOnly;
+                }
+
+                // Strategy 3: Check IsKeyboardFocusable property
+                bool isKeyboardFocusable = element.Current.IsKeyboardFocusable;
+                Logger.Log($"IsDocumentEditable: IsKeyboardFocusable = {isKeyboardFocusable}");
+
+                if (!isKeyboardFocusable)
+                {
+                    return false;
+                }
+
+                // Strategy 4: Check for known application processes
+                string processName = _lastProcessName.ToUpperInvariant();
+
+                // Known editor applications - always check these
+                bool isKnownEditorProcess = processName switch
+                {
+                    "WINWORD" => true,      // Microsoft Word
+                    "EXCEL" => true,        // Microsoft Excel
+                    "POWERPNT" => true,     // Microsoft PowerPoint
+                    "ONENOTE" => true,      // Microsoft OneNote
+                    "SOFFICE" => true,      // LibreOffice
+                    "NOTEPAD++" => true,    // Notepad++
+                    "CODE" => true,         // VS Code
+                    "DEVENV" => true,       // Visual Studio
+                    "SUBLIME_TEXT" => true, // Sublime Text
+                    "ATOM" => true,         // Atom
+                    _ => false
+                };
+
+                if (isKnownEditorProcess)
+                {
+                    Logger.Log($"IsDocumentEditable: Known editor process '{processName}' - allowing");
+                    return true;
+                }
+
+                // Known browser processes - default to NOT editable for Document controls
+                bool isBrowserProcess = processName switch
+                {
+                    "CHROME" => true,
+                    "FIREFOX" => true,
+                    "MSEDGE" => true,
+                    "IEXPLORE" => true,
+                    "OPERA" => true,
+                    "BRAVE" => true,
+                    "VIVALDI" => true,
+                    "CHROMIUM" => true,
+                    _ => false
+                };
+
+                if (isBrowserProcess)
+                {
+                    // For browser Documents, if we couldn't determine editability through patterns,
+                    // default to NOT editable to prevent grammar checking on rendered web pages
+                    Logger.Log($"IsDocumentEditable: Browser process '{processName}' - defaulting to NOT editable");
+                    return false;
+                }
+
+                // Unknown application with keyboard focus - assume editable
+                Logger.Log($"IsDocumentEditable: Unknown process '{processName}' with keyboard focus - assuming editable");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"IsDocumentEditable: Exception - {ex.Message}");
+                // On error, default to NOT editable for safety
+                return false;
+            }
         }
 
         public void Start()
@@ -143,7 +251,22 @@ namespace GramCloneClient.Services
                     _lastProcessName = string.Empty;
                 }
 
-                if (controlType == ControlType.Edit || controlType == ControlType.Document)
+                // Determine if we should process this element
+                bool shouldProcess = false;
+                if (controlType == ControlType.Edit)
+                {
+                    // Always process Edit controls (text inputs, text areas, etc.)
+                    shouldProcess = true;
+                    Logger.Log("Focus: Edit control - will process");
+                }
+                else if (controlType == ControlType.Document)
+                {
+                    // For Document controls, check if editable (skip read-only web pages)
+                    shouldProcess = IsDocumentEditable(element);
+                    Logger.Log($"Focus: Document control - editable={shouldProcess}");
+                }
+
+                if (shouldProcess)
                 {
                     // Initial read
                     var (text, bounds, caretBounds) = ReadTextAndBounds(element);
@@ -220,6 +343,8 @@ namespace GramCloneClient.Services
             string text = string.Empty;
             Rect bounds = Rect.Empty;
             Rect caretBounds = Rect.Empty;
+            bool hasTextPattern = false;
+            string controlType = element.Current.ControlType.LocalizedControlType;
 
             try
             {
@@ -228,6 +353,7 @@ namespace GramCloneClient.Services
                 object patternObj;
                 if (element.TryGetCurrentPattern(TextPattern.Pattern, out patternObj))
                 {
+                    hasTextPattern = true;
                     var textPattern = (TextPattern)patternObj;
                     _lastTextPattern = textPattern;  // Cache for GetErrorRects
                     var documentRange = textPattern.DocumentRange;
@@ -250,6 +376,15 @@ namespace GramCloneClient.Services
                     var valuePattern = (ValuePattern)patternObj;
                     text = valuePattern.Current.Value;
                 }
+                
+                // Fire diagnostics event
+                DiagnosticsUpdated?.Invoke(this, new FocusDiagnostics
+                {
+                    ProcessName = _lastProcessName,
+                    ControlType = controlType,
+                    HasTextPattern = hasTextPattern,
+                    Bounds = bounds
+                });
             }
             catch (Exception ex)
             {
@@ -648,5 +783,13 @@ namespace GramCloneClient.Services
         {
             Stop();
         }
+    }
+
+    public class FocusDiagnostics
+    {
+        public string ProcessName { get; set; } = string.Empty;
+        public string ControlType { get; set; } = string.Empty;
+        public bool HasTextPattern { get; set; }
+        public Rect Bounds { get; set; }
     }
 }

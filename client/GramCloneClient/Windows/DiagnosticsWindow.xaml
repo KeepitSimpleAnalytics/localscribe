@@ -1,0 +1,109 @@
+<Window x:Class="GramCloneClient.Windows.DiagnosticsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LocalScribe Diagnostics"
+        Width="400" Height="500"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackground}"
+        ResizeMode="CanResize">
+    
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Header -->
+            <RowDefinition Height="Auto"/> <!-- Text Analytics -->
+            <RowDefinition Height="Auto"/> <!-- Focus Inspector -->
+            <RowDefinition Height="Auto"/> <!-- Health -->
+            <RowDefinition Height="*"/>    <!-- Log -->
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="System Diagnostics" FontSize="18" FontWeight="Bold" 
+                   Foreground="{DynamicResource WindowForeground}" Margin="0,0,0,12"/>
+
+        <!-- 1. Text Analytics -->
+        <Border Grid.Row="1" Background="{DynamicResource ContextBackground}" CornerRadius="4" Padding="10" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Text Analytics" FontWeight="Bold" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,6"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock>
+                            <Run Text="Words: " Foreground="{DynamicResource SecondaryText}"/>
+                            <Run x:Name="WordCountText" Text="0" FontWeight="Bold" Foreground="{DynamicResource WindowForeground}"/>
+                        </TextBlock>
+                        <TextBlock>
+                            <Run Text="Chars: " Foreground="{DynamicResource SecondaryText}"/>
+                            <Run x:Name="CharCountText" Text="0" FontWeight="Bold" Foreground="{DynamicResource WindowForeground}"/>
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                         <TextBlock>
+                            <Run Text="Read Time: " Foreground="{DynamicResource SecondaryText}"/>
+                            <Run x:Name="ReadTimeText" Text="0s" FontWeight="Bold" Foreground="{DynamicResource WindowForeground}"/>
+                        </TextBlock>
+                        <TextBlock>
+                            <Run Text="Grade: " Foreground="{DynamicResource SecondaryText}"/>
+                            <Run x:Name="GradeLevelText" Text="N/A" FontWeight="Bold" Foreground="{DynamicResource WindowForeground}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- 2. Focus Inspector -->
+        <Border Grid.Row="2" Background="{DynamicResource ContextBackground}" CornerRadius="4" Padding="10" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Focus Inspector" FontWeight="Bold" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,6"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                         <TextBlock Text="Process:" Foreground="{DynamicResource SecondaryText}"/>
+                         <TextBlock Text="Control:" Foreground="{DynamicResource SecondaryText}"/>
+                         <TextBlock Text="Pattern:" Foreground="{DynamicResource SecondaryText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock x:Name="ProcessNameText" Text="-" FontWeight="SemiBold" Foreground="{DynamicResource WindowForeground}"/>
+                        <TextBlock x:Name="ControlTypeText" Text="-" Foreground="{DynamicResource WindowForeground}"/>
+                        <TextBlock x:Name="PatternStatusText" Text="-" FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock x:Name="BoundsText" Text="Bounds: (0,0,0,0)" FontSize="10" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 3. Health -->
+        <Border Grid.Row="3" Background="{DynamicResource ContextBackground}" CornerRadius="4" Padding="10" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Health Matrix" FontWeight="Bold" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="BackendStatusDot" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="BackendStatusText" Text="Backend: Checking..." Foreground="{DynamicResource WindowForeground}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Ellipse x:Name="OllamaStatusDot" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="OllamaStatusText" Text="Ollama: Checking..." Foreground="{DynamicResource WindowForeground}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Ellipse x:Name="LanguageToolStatusDot" Width="10" Height="10" Fill="Gray" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="LanguageToolStatusText" Text="LanguageTool: Checking..." Foreground="{DynamicResource WindowForeground}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 4. Log -->
+        <TextBlock Grid.Row="4" Text="Live Logs" FontWeight="Bold" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,4"/>
+        <TextBox Grid.Row="4" x:Name="LogBox" 
+                 Background="{DynamicResource ContextBackground}" 
+                 Foreground="{DynamicResource WindowForeground}"
+                 BorderThickness="0"
+                 IsReadOnly="True" 
+                 VerticalScrollBarVisibility="Auto"
+                 FontFamily="Consolas" FontSize="11"
+                 Margin="0,20,0,0"/>
+    </Grid>
+</Window>

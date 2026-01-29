@@ -9,24 +9,28 @@
         ShowInTaskbar="False"
         SizeToContent="WidthAndHeight"
         ResizeMode="NoResize">
-    <Border Background="White" BorderBrush="#CCCCCC" BorderThickness="1"
+    <Border Background="{DynamicResource WindowBackground}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
             CornerRadius="6" Padding="12" MaxWidth="320">
         <Border.Effect>
             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
         </Border.Effect>
         <StackPanel>
             <!-- Error context with highlighted text -->
-            <Border x:Name="ContextBorder" Background="#F5F5F5" Padding="8,6"
+            <Border x:Name="ContextBorder" Background="{DynamicResource ContextBackground}" Padding="8,6"
                     CornerRadius="4" Margin="0,0,0,8" Visibility="Collapsed">
-                <TextBlock x:Name="ContextText" TextWrapping="Wrap" FontSize="11"/>
+                <TextBlock x:Name="ContextText" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource WindowForeground}"/>
             </Border>
 
             <!-- Error message -->
             <TextBlock x:Name="ErrorMessage" TextWrapping="Wrap"
-                       FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                       FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"
+                       Foreground="{DynamicResource WindowForeground}"/>
 
             <!-- Suggestions label -->
-            <TextBlock Text="Click to apply:" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+            <TextBlock Text="Click to apply:" FontSize="10"
+                       Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,4"/>
 
             <!-- Clickable suggestions -->
             <ItemsControl x:Name="SuggestionsList"/>

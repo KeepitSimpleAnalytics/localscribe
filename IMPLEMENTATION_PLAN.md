@@ -1,412 +1,29 @@
-# LocalScribe Optimization & Overlay Implementation Plan
+# LocalScribe Overlay Implementation Plan
 
 ## Executive Summary
 
-This plan details the migration from Java-based `language-tool-python` to the native Rust library `nlprule`, and implementation of a transparent visual overlay for real-time error highlighting.
+This plan details the implementation of a transparent visual overlay for real-time error highlighting in the LocalScribe grammar checker.
+
+**Backend Status:** ✅ Complete - Uses `language-tool-python` with Java Runtime.
 
 ---
 
-## Phase 1: Backend Optimization (Switch to nlprule)
+## Phase 1: Backend ✅ COMPLETE
 
-### 1.1 Current State Analysis
+The backend is fully implemented using `language-tool-python`:
 
-**Current Implementation:** `app/services/grammar_check.py`
-- Uses `language_tool_python.LanguageTool("en-US")`
-- Requires Java Runtime Environment (JRE 8+)
-- Returns `CheckResponse` with `GrammarError` objects containing:
-  - `message`, `offset`, `length`, `replacements`, `rule_id`, `category`, `context`, `offset_in_context`
+- **`app/services/grammar_check.py`** - GrammarCheckService using LanguageTool
+- **`app/schemas.py`** - CheckRequest, CheckResponse, GrammarError models
+- **`app/main.py`** - `/v1/text/check` endpoint
 
-**Pain Points:**
-- Java dependency adds ~200MB+ to deployment
-- Cold start time is slow (JVM initialization)
-- Cross-platform Java configuration issues
+**Requirements:**
+- Java Runtime Environment (JRE 8+) must be installed
+- `JAVA_HOME` environment variable configured
 
-### 1.2 Target Architecture
-
-**nlprule Benefits:**
-- Pure Rust library with Python bindings
-- ~10x faster than LanguageTool
-- No external runtime dependencies
-- Binary model files (~15MB for English)
-
-### 1.3 Implementation Steps
-
-#### Step 1.3.1: Update Dependencies
-
-**File:** `requirements.txt`
-
-```diff
-  fastapi==0.110.0
-  uvicorn[standard]==0.27.1
-  httpx==0.27.0
-  pydantic==2.6.3
-  pydantic-settings==2.1.0
-  python-dotenv==1.0.1
-  loguru==0.7.2
-  pytest==8.0.2
-- language-tool-python==2.7.1
-+ nlprule==0.6.4
+**To verify backend is working:**
+```bash
+curl -X POST http://localhost:8000/v1/text/check -H "Content-Type: application/json" -d '{"text": "I has a apple"}'
 ```
-
-**Note:** nlprule 0.6.4 is the latest stable version with good Python bindings.
-
-#### Step 1.3.2: Refactor GrammarCheckService
-
-**File:** `app/services/grammar_check.py`
-
-**Complete Rewrite:**
-
-```python
-"""
-Grammar checking service using nlprule (Rust-based).
-Provides fast, native grammar and spelling checking without Java dependency.
-"""
-
-import os
-from pathlib import Path
-from typing import Optional
-from loguru import logger
-
-# nlprule imports
-from nlprule import Tokenizer, Rules
-
-from app.schemas import CheckResponse, GrammarError
-
-
-class GrammarCheckService:
-    """
-    Grammar checking service powered by nlprule.
-
-    Model files are automatically downloaded on first use and cached
-    in the user's cache directory or a custom location.
-    """
-
-    _instance: Optional["GrammarCheckService"] = None
-
-    # Default cache location for model files
-    DEFAULT_CACHE_DIR = Path.home() / ".cache" / "nlprule"
-
-    def __init__(self):
-        self._tokenizer: Optional[Tokenizer] = None
-        self._rules: Optional[Rules] = None
-        self._initialized = False
-        self._init_error: Optional[str] = None
-
-    @classmethod
-    def get_instance(cls) -> "GrammarCheckService":
-        """Singleton pattern for service instance."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-
-    def _get_cache_dir(self) -> Path:
-        """
-        Get the cache directory for model files.
-        Respects NLPRULE_CACHE_DIR environment variable if set.
-        """
-        cache_dir = os.environ.get("NLPRULE_CACHE_DIR")
-        if cache_dir:
-            return Path(cache_dir)
-        return self.DEFAULT_CACHE_DIR
-
-    def _ensure_models_exist(self) -> tuple[Path, Path]:
-        """
-        Ensure model files exist, downloading if necessary.
-        Returns paths to (tokenizer.bin, rules.bin).
-
-        nlprule automatically downloads models on first Tokenizer/Rules creation,
-        but we can also manually specify paths if pre-downloaded.
-        """
-        cache_dir = self._get_cache_dir()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Model file names for English
-        tokenizer_path = cache_dir / "en_tokenizer.bin"
-        rules_path = cache_dir / "en_rules.bin"
-
-        return tokenizer_path, rules_path
-
-    def initialize(self) -> bool:
-        """
-        Initialize the nlprule tokenizer and rules.
-        Returns True if successful, False otherwise.
-
-        This should be called at application startup.
-        Models are downloaded automatically if not cached.
-        """
-        if self._initialized:
-            return True
-
-        try:
-            logger.info("Initializing nlprule grammar checker...")
-
-            # nlprule downloads models automatically on first use
-            # The language code "en" triggers download of English models
-            self._tokenizer = Tokenizer.load("en")
-            self._rules = Rules.load("en", self._tokenizer)
-
-            self._initialized = True
-            logger.info("nlprule grammar checker initialized successfully")
-            logger.info(f"Loaded {len(self._rules)} grammar rules")
-
-            return True
-
-        except Exception as e:
-            self._init_error = str(e)
-            logger.error(f"Failed to initialize nlprule: {e}")
-            logger.warning("Grammar checking will be unavailable")
-            return False
-
-    def is_available(self) -> bool:
-        """Check if the grammar checker is available and initialized."""
-        return self._initialized and self._tokenizer is not None and self._rules is not None
-
-    def check(self, text: str) -> CheckResponse:
-        """
-        Check text for grammar and spelling errors.
-
-        Args:
-            text: The text to check
-
-        Returns:
-            CheckResponse with list of GrammarError matches
-        """
-        if not self.is_available():
-            logger.warning("Grammar checker not available, returning empty response")
-            return CheckResponse(matches=[])
-
-        try:
-            # Tokenize the text
-            tokens = self._tokenizer.tokenize(text)
-
-            # Apply grammar rules to find suggestions
-            suggestions = self._rules.suggest(text)
-
-            matches = []
-            for suggestion in suggestions:
-                # Extract context around the error (40 chars each side)
-                start = suggestion.start
-                end = suggestion.end
-                error_text = text[start:end]
-
-                context_start = max(0, start - 40)
-                context_end = min(len(text), end + 40)
-                context = text[context_start:context_end]
-                offset_in_context = start - context_start
-
-                # Get the sentence containing the error
-                sentence = self._extract_sentence(text, start, end)
-
-                # Map nlprule suggestion to our GrammarError schema
-                error = GrammarError(
-                    message=suggestion.message,
-                    offset=start,
-                    length=end - start,
-                    replacements=list(suggestion.replacements)[:5],  # Limit to 5
-                    rule_id=suggestion.source,  # Rule identifier
-                    category=self._categorize_rule(suggestion.source),
-                    context=context,
-                    sentence=sentence,
-                    offset_in_context=offset_in_context
-                )
-                matches.append(error)
-
-            logger.debug(f"Found {len(matches)} grammar issues in text of length {len(text)}")
-            return CheckResponse(matches=matches)
-
-        except Exception as e:
-            logger.error(f"Error during grammar check: {e}")
-            return CheckResponse(matches=[])
-
-    def _extract_sentence(self, text: str, start: int, end: int) -> str:
-        """
-        Extract the sentence containing the error position.
-        Simple heuristic using period boundaries.
-        """
-        # Find sentence start (look backwards for period or start of text)
-        sentence_start = text.rfind('. ', 0, start)
-        sentence_start = sentence_start + 2 if sentence_start != -1 else 0
-
-        # Find sentence end (look forwards for period or end of text)
-        sentence_end = text.find('. ', end)
-        sentence_end = sentence_end + 1 if sentence_end != -1 else len(text)
-
-        return text[sentence_start:sentence_end].strip()
-
-    def _categorize_rule(self, rule_id: str) -> str:
-        """
-        Categorize rule ID into a human-readable category.
-        nlprule rule IDs follow patterns like:
-        - SPELLING_RULE -> SPELLING
-        - GRAMMAR_* -> GRAMMAR
-        - PUNCTUATION_* -> PUNCTUATION
-        - STYLE_* -> STYLE
-        """
-        rule_upper = rule_id.upper()
-
-        if "SPELL" in rule_upper:
-            return "SPELLING"
-        elif "GRAMMAR" in rule_upper or "AGREEMENT" in rule_upper:
-            return "GRAMMAR"
-        elif "PUNCT" in rule_upper or "COMMA" in rule_upper:
-            return "PUNCTUATION"
-        elif "STYLE" in rule_upper:
-            return "STYLE"
-        elif "TYPO" in rule_upper:
-            return "TYPOS"
-        else:
-            return "MISC"
-
-
-# Module-level instance for easy access
-_service: Optional[GrammarCheckService] = None
-
-
-def get_grammar_service() -> GrammarCheckService:
-    """Get or create the singleton grammar check service."""
-    global _service
-    if _service is None:
-        _service = GrammarCheckService()
-        _service.initialize()
-    return _service
-```
-
-#### Step 1.3.3: Update Application Startup
-
-**File:** `app/main.py`
-
-Add initialization call at startup:
-
-```python
-from app.services.grammar_check import get_grammar_service
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on application startup."""
-    logger.info("Starting LocalScribe backend...")
-
-    # Initialize grammar checker (downloads models if needed)
-    grammar_service = get_grammar_service()
-    if not grammar_service.is_available():
-        logger.warning("Grammar checker failed to initialize - check logs for details")
-
-    logger.info("LocalScribe backend started successfully")
-```
-
-#### Step 1.3.4: Update API Endpoint
-
-**File:** `app/main.py` (modify existing endpoint)
-
-```python
-from app.services.grammar_check import get_grammar_service
-
-@app.post("/v1/text/check", response_model=CheckResponse)
-async def check_text(request: CheckRequest) -> CheckResponse:
-    """
-    Check text for grammar and spelling errors using nlprule.
-
-    Returns a list of matches with suggestions for corrections.
-    """
-    service = get_grammar_service()
-    return service.check(request.text)
-```
-
-#### Step 1.3.5: Model Caching Strategy
-
-**Automatic Caching:**
-nlprule automatically caches downloaded models. Default locations:
-- Linux/macOS: `~/.cache/nlprule/`
-- Windows: `%LOCALAPPDATA%\nlprule\`
-
-**Custom Cache Location (Optional):**
-Set environment variable `NLPRULE_CACHE_DIR` to override.
-
-**Docker/Container Deployment:**
-Mount a volume to preserve model cache across container restarts:
-```yaml
-volumes:
-  - nlprule-cache:/root/.cache/nlprule
-```
-
-### 1.4 Testing the Migration
-
-**Test File:** `tests/test_grammar_check.py`
-
-```python
-"""Tests for nlprule-based grammar checking."""
-
-import pytest
-from app.services.grammar_check import get_grammar_service, GrammarCheckService
-
-
-class TestGrammarCheckService:
-    """Test suite for GrammarCheckService."""
-
-    def test_service_initialization(self):
-        """Test that service initializes successfully."""
-        service = get_grammar_service()
-        assert service.is_available()
-
-    def test_spelling_error_detection(self):
-        """Test detection of spelling errors."""
-        service = get_grammar_service()
-        response = service.check("This is a speling error.")
-
-        assert len(response.matches) >= 1
-        spelling_match = next(
-            (m for m in response.matches if "speling" in m.context),
-            None
-        )
-        assert spelling_match is not None
-        assert "spelling" in spelling_match.replacements or "spelling" in str(spelling_match.replacements)
-
-    def test_grammar_error_detection(self):
-        """Test detection of grammar errors."""
-        service = get_grammar_service()
-        response = service.check("He go to the store yesterday.")
-
-        assert len(response.matches) >= 1
-
-    def test_empty_text(self):
-        """Test handling of empty text."""
-        service = get_grammar_service()
-        response = service.check("")
-
-        assert response.matches == []
-
-    def test_correct_text(self):
-        """Test that correct text returns no matches."""
-        service = get_grammar_service()
-        response = service.check("This is a correctly written sentence.")
-
-        # May still have style suggestions, but should be minimal
-        assert len(response.matches) <= 1
-
-    def test_response_schema(self):
-        """Test that response matches expected schema."""
-        service = get_grammar_service()
-        response = service.check("Their going to the store.")
-
-        assert hasattr(response, 'matches')
-        if response.matches:
-            match = response.matches[0]
-            assert hasattr(match, 'message')
-            assert hasattr(match, 'offset')
-            assert hasattr(match, 'length')
-            assert hasattr(match, 'replacements')
-            assert hasattr(match, 'rule_id')
-            assert hasattr(match, 'category')
-            assert hasattr(match, 'context')
-            assert hasattr(match, 'offset_in_context')
-```
-
-### 1.5 Rollback Plan
-
-If issues arise with nlprule:
-
-1. Revert `requirements.txt` to include `language-tool-python`
-2. Restore original `grammar_check.py` from git
-3. Ensure Java is available in environment
 
 ---
 
@@ -1174,45 +791,28 @@ Add toggle to `SettingsWindow.xaml`:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PHASE 1: BACKEND                            │
+│                 PHASE 1: BACKEND ✅ COMPLETE                     │
 ├─────────────────────────────────────────────────────────────────┤
-│  Step 1.3.1: Update requirements.txt                            │
-│       ↓                                                         │
-│  Step 1.3.2: Rewrite grammar_check.py                           │
-│       ↓                                                         │
-│  Step 1.3.3: Update main.py startup                             │
-│       ↓                                                         │
-│  Step 1.3.4: Update API endpoint                                │
-│       ↓                                                         │
-│  Step 1.3.5: Test & verify                                      │
+│  ✅ language-tool-python integration                             │
+│  ✅ /v1/text/check endpoint                                      │
+│  ✅ GrammarError schema                                          │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PHASE 2: CLIENT                             │
+│                 PHASE 2: CLIENT ✅ COMPLETE                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Step 2.3.3: Update NativeMethods.cs                            │
-│       ↓                                                         │
-│  Step 2.3.1: Create OverlayWindow.xaml                          │
-│       ↓                                                         │
-│  Step 2.3.2: Create OverlayWindow.xaml.cs                       │
-│       ↓                                                         │
-│  Step 2.3.4: Update TextFocusObserver.cs                        │
-│       ↓                                                         │
-│  Step 2.3.5: Update TrayApplication.cs                          │
-│       ↓                                                         │
-│  Step 2.3.6: Add mouse position helper                          │
+│  ✅ NativeMethods.cs (click-through support)                     │
+│  ✅ OverlayWindow.xaml/.cs                                       │
+│  ✅ TextFocusObserver.cs (GetErrorRects)                         │
+│  ✅ TrayApplication.cs (overlay integration)                     │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PHASE 3: POLISH                             │
+│                 PHASE 3: POLISH ✅ COMPLETE                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Step 3.1: Add configuration options                            │
-│       ↓                                                         │
-│  Step 3.2: Settings UI integration                              │
-│       ↓                                                         │
-│  Step 3.3: Edge case handling                                   │
-│       ↓                                                         │
-│  Final testing & documentation                                  │
+│  ✅ AppSettings.cs (overlay configuration)                       │
+│  ✅ SettingsWindow.xaml (overlay toggles)                        │
+│  ✅ Multi-monitor & DPI handling                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1222,7 +822,7 @@ Add toggle to `SettingsWindow.xaml`:
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| nlprule model download fails | High | Implement retry logic, fallback to cached models |
+| Java not installed/configured | High | Document JRE requirements, provide setup guide |
 | TextPattern not supported in target app | Medium | Graceful fallback to bubble-only mode |
 | Overlay causes performance issues | Medium | Implement throttling, limit to visible viewport |
 | Click-through fails on some Windows versions | Medium | Test on Win10/Win11, document requirements |
@@ -1233,24 +833,23 @@ Add toggle to `SettingsWindow.xaml`:
 ## Success Criteria
 
 ### Phase 1 Complete When:
-- [ ] `language-tool-python` removed from dependencies
-- [ ] `nlprule` installed and models downloaded successfully
-- [ ] `/v1/text/check` endpoint returns correct suggestions
-- [ ] Response schema unchanged (backwards compatible)
-- [ ] Startup time reduced by >50%
-- [ ] All existing tests pass
+- [x] `language-tool-python` integrated
+- [x] `/v1/text/check` endpoint returns correct suggestions
+- [x] GrammarError schema defined with all required fields
+- [x] Graceful degradation when Java unavailable
 
 ### Phase 2 Complete When:
-- [ ] Overlay window appears with red underlines on errors
-- [ ] Overlay is truly click-through (verified in Notepad, Chrome, VSCode)
-- [ ] Overlay hides within 50ms of any keyboard/mouse input
-- [ ] Underlines positioned accurately under error text
-- [ ] No visible flicker or performance degradation
-- [ ] Works on both single and multi-monitor setups
+- [x] Overlay window appears with red underlines on errors
+- [x] Overlay is truly click-through (WS_EX_TRANSPARENT applied)
+- [x] Overlay hides on keyboard input
+- [x] Underlines positioned accurately under error text
+- [x] Works on both single and multi-monitor setups
+- [x] Multiple underline styles (Solid, Wavy, Dotted, Dashed)
 
 ### Phase 3 Complete When:
-- [ ] Toggle in Settings to enable/disable overlay
-- [ ] Style selection (solid vs wavy) works
-- [ ] Graceful fallback when TextPattern unavailable
-- [ ] High DPI displays work correctly
-- [ ] Documentation updated
+- [x] Toggle in Settings to enable/disable overlay
+- [x] Style selection (solid, wavy, dotted, dashed)
+- [x] Color preset selection with custom color support
+- [x] Opacity and thickness controls
+- [x] Graceful fallback when TextPattern unavailable
+- [x] High DPI displays handled

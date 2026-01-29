@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfApplication = System.Windows.Application;
@@ -28,8 +29,10 @@ public sealed class TrayApplication : IDisposable
     private readonly SettingsWindow _settingsWindow;
     private readonly BubbleWindow _bubbleWindow;
     private readonly OverlayWindow _overlayWindow = new();
+    private readonly DiagnosticsWindow _diagnosticsWindow = new(); // New Diagnostics Dashboard
     private readonly BackendProcessManager _processManager = new();
     private readonly TextFocusObserver _textObserver = new();
+    private AboutWindow? _aboutWindow;
     
     // Debounce Timer
     private DispatcherTimer _debounceTimer;
@@ -38,6 +41,10 @@ public sealed class TrayApplication : IDisposable
     private Rect _pendingCaretBounds = Rect.Empty;
 
     private IntPtr _lastFocusedHandle;
+
+    // Model warmup state
+    private bool _isWarmingUp;
+    private DateTime _lastWarmupTime = DateTime.MinValue;
 
     public TrayApplication()
     {
@@ -55,6 +62,7 @@ public sealed class TrayApplication : IDisposable
         _hotkeyListener.HotkeyPressed += OnHotkeyPressed;
 
         _textObserver.TextChanged += OnTextObserved;
+        _textObserver.DiagnosticsUpdated += OnDiagnosticsUpdated; // Wire up diagnostics
 
         // Initialize Debounce Timer with configurable delay from settings
         _debounceTimer = new DispatcherTimer();
@@ -65,6 +73,8 @@ public sealed class TrayApplication : IDisposable
 
         _trayIconService = new TrayIconService(
             onShowSettings: ShowSettings,
+            onShowDiagnostics: ShowDiagnostics,
+            onShowAbout: ShowAbout,
             onExit: () => WpfApplication.Current.Shutdown()
         );
 
@@ -101,7 +111,8 @@ public sealed class TrayApplication : IDisposable
 
         try
         {
-            _trayIconService.Initialize();
+            // Initialize tray menu based on settings
+            _trayIconService.Initialize(_settings.EnableDiagnostics);
         }
         catch (Exception ex)
         {
@@ -116,6 +127,34 @@ public sealed class TrayApplication : IDisposable
 
         TryRegisterHotkey();
         _textObserver.Start();
+
+        // Check version compatibility after a short delay to allow backend to start
+        _ = CheckVersionCompatibilityAsync();
+    }
+
+    private async Task CheckVersionCompatibilityAsync()
+    {
+        // Wait a bit for the backend to be ready (especially if auto-started)
+        await Task.Delay(2000);
+
+        try
+        {
+            var health = await _backendClient.GetHealthAsync();
+
+            if (health.Status == "ok" && !string.IsNullOrEmpty(health.Version))
+            {
+                if (!Services.AppVersion.IsCompatibleWith(health.Version))
+                {
+                    _trayIconService.ShowBalloon(
+                        $"Version mismatch: Client {Services.AppVersion.SemanticVersion} / Backend {health.Version}. " +
+                        "Consider updating for best compatibility.");
+                }
+            }
+        }
+        catch
+        {
+            // Silently ignore - version check is informational only
+        }
     }
 
     private async void OnHotkeyPressed(object? sender, EventArgs e)
@@ -162,6 +201,16 @@ public sealed class TrayApplication : IDisposable
 
     private void OnTextObserved(object? sender, (string Text, Rect ElementBounds, Rect CaretBounds) args)
     {
+        // Update diagnostics dashboard if open
+        if (_diagnosticsWindow.IsVisible)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(() =>
+                _diagnosticsWindow.UpdateTextMetrics(args.Text));
+        }
+
+        // Trigger model warmup if not recently done (keeps Ollama model loaded)
+        TriggerWarmupIfNeeded();
+
         // Marshal to UI thread since this callback comes from UI Automation thread
         WpfApplication.Current.Dispatcher.BeginInvoke(() =>
         {
@@ -183,10 +232,63 @@ public sealed class TrayApplication : IDisposable
         });
     }
 
+    private void TriggerWarmupIfNeeded()
+    {
+        // Only warm up if we haven't done so in the last 5 minutes
+        if (_isWarmingUp || (DateTime.Now - _lastWarmupTime).TotalMinutes < 5)
+        {
+            return;
+        }
+
+        _isWarmingUp = true;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Logger.Log("Warming up Ollama model...");
+                await _backendClient.WarmupModelAsync();
+                _lastWarmupTime = DateTime.Now;
+                Logger.Log("Model warmup complete");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Model warmup failed: {ex.Message}");
+            }
+            finally
+            {
+                _isWarmingUp = false;
+            }
+        });
+    }
+
+    private void OnDiagnosticsUpdated(object? sender, FocusDiagnostics e)
+    {
+        if (_diagnosticsWindow.IsVisible)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(() => 
+                _diagnosticsWindow.UpdateFocusInfo(e.ProcessName, e.ControlType, e.HasTextPattern, e.Bounds));
+        }
+    }
+
     private async void OnDebounceTimerTick(object? sender, EventArgs e)
     {
         _debounceTimer.Stop();
         string text = _pendingTextToCheck;
+
+        // Diagnostics Health Check (Ping backend if diagnostics window is open)
+        if (_diagnosticsWindow.IsVisible)
+        {
+            try {
+                var health = await _backendClient.GetHealthAsync();
+                _diagnosticsWindow.UpdateHealth(
+                    health.Status == "ok",
+                    true, // Ollama check separate later
+                    health.LanguageToolStatus,
+                    health.LanguageToolError);
+            } catch {
+                _diagnosticsWindow.UpdateHealth(false, false, "unknown", "Backend unreachable");
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(text) || text.Length < 5)
         {
@@ -198,13 +300,55 @@ public sealed class TrayApplication : IDisposable
         try
         {
             Logger.Log($"Checking text ({text.Length} chars)...");
-            var response = await _backendClient.CheckTextAsync(text, _settings.LanguageTool);
-            int totalErrors = response.Matches.Count;
-            Logger.Log($"Grammar Check Result: {totalErrors} errors found.");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Checking text: {text.Length} chars");
+            
+            // Start tasks in parallel
+            var grammarTask = _backendClient.CheckTextAsync(text, _settings.LanguageTool);
+            
+            // Only run analysis on longer text chunks to save resources
+            Task<AnalysisResponse>? analysisTask = null;
+            if (text.Length > 30) // lowered threshold for testing
+            {
+                 analysisTask = _backendClient.AnalyzeTextAsync(text);
+            }
 
-            // Limit to first 20 errors to prevent overwhelming the overlay on complex pages
+            // Wait for grammar first (priority)
+            var grammarResponse = await grammarTask;
+            
+            // Wait for analysis if started
+            AnalysisResponse? analysisResponse = null;
+            if (analysisTask != null)
+            {
+                try
+                {
+                    // Allow time for local LLM analysis
+                    var completedTask = await Task.WhenAny(analysisTask, Task.Delay(30000));
+                    if (completedTask == analysisTask)
+                    {
+                        analysisResponse = await analysisTask;
+                    }
+                    else
+                    {
+                        Logger.Log("Analysis timed out (30s limit)");
+                        if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog("Analysis timed out");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"Analysis failed: {ex.Message}");
+                    if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Analysis failed: {ex.Message}");
+                }
+            }
+
+            int totalErrors = grammarResponse.Matches.Count;
+            int totalAnalysisIssues = analysisResponse?.Issues.Count ?? 0;
+            
+            Logger.Log($"Check Result: {totalErrors} grammar errors, {totalAnalysisIssues} analysis issues.");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Result: {totalErrors} errors, {totalAnalysisIssues} analysis issues");
+
+            // Limit to first 20 errors to prevent overwhelming the overlay
             const int maxErrors = 20;
-            var limitedMatches = response.Matches.Take(maxErrors).ToList();
+            var limitedMatches = grammarResponse.Matches.Take(maxErrors).ToList();
             bool hasMoreErrors = totalErrors > maxErrors;
 
             _bubbleWindow.UpdateState(limitedMatches, hasMoreErrors ? $"{maxErrors}+" : null);
@@ -213,35 +357,58 @@ public sealed class TrayApplication : IDisposable
             Rect targetRect = _pendingCaretBounds != Rect.Empty ? _pendingCaretBounds : _pendingBounds;
             _bubbleWindow.UpdatePosition(targetRect);
 
-            if (limitedMatches.Count > 0)
+            if (limitedMatches.Count > 0 || totalAnalysisIssues > 0)
             {
                 _bubbleWindow.Show();
 
-                // Collect error regions with match data for hover detection
-                var errorRegions = new List<(Rect, GrammarMatch)>();
+                // 1. Collect Grammar Regions
+                var grammarRegions = new List<(Rect, GrammarMatch)>();
                 foreach (var match in limitedMatches)
                 {
-                    Logger.Log($"Getting rects for error at offset={match.Offset}, length={match.Length}");
                     var rects = _textObserver.GetErrorRects(match.Offset, match.Length);
-                    Logger.Log($"Got {rects.Count} rectangles for this error");
                     foreach (var rect in rects)
                     {
-                        Logger.Log($"  Rect: X={rect.X}, Y={rect.Y}, W={rect.Width}, H={rect.Height}");
-                        errorRegions.Add((rect, match));
+                        grammarRegions.Add((rect, match));
                     }
                 }
 
-                Logger.Log($"Total error regions collected: {errorRegions.Count}");
-                if (errorRegions.Count > 0)
+                // 2. Collect Analysis Regions
+                var analysisRegions = new List<(Rect, GrammarMatch)>();
+                if (analysisResponse != null)
+                {
+                    foreach (var issue in analysisResponse.Issues)
+                    {
+                        var rects = _textObserver.GetErrorRects(issue.Offset, issue.Length);
+                        
+                        // Map AnalysisIssue to GrammarMatch for compatibility
+                        var fakeMatch = new GrammarMatch
+                        {
+                            Message = $"{issue.IssueType.ToUpper()}: {issue.Suggestion}",
+                            Offset = issue.Offset,
+                            Length = issue.Length,
+                            Replacements = new List<string> { issue.Suggestion },
+                            RuleId = $"SEMANTIC_{issue.IssueType.ToUpper()}", // Used for color mapping
+                            Category = "CLARITY",
+                            Context = issue.QuotedText
+                        };
+                        
+                        foreach (var rect in rects)
+                        {
+                            analysisRegions.Add((rect, fakeMatch));
+                        }
+                    }
+                }
+
+                if (grammarRegions.Count > 0 || analysisRegions.Count > 0)
                 {
                     // Must show overlay first before drawing (PointFromScreen needs PresentationSource)
                     _overlayWindow.ShowOverlay();
-                    _overlayWindow.SetErrorRegions(errorRegions);
-                    Logger.Log("Overlay shown with hover detection");
+                    _overlayWindow.SetErrorRegions(grammarRegions, analysisRegions);
                 }
                 else
                 {
-                    Logger.Log("No rectangles to draw - overlay not shown");
+                    if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog("WARN: Errors found but 0 rects (TextPattern issue?)");
+                    _overlayWindow.HideOverlay();
                 }
             }
             else
@@ -252,7 +419,8 @@ public sealed class TrayApplication : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Log($"Check failed: {ex.Message}");
+            Logger.Log($"Check/Analysis loop failed: {ex.Message}");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Error: {ex.Message}");
             _bubbleWindow.Hide();
             _overlayWindow.HideOverlay();
         }
@@ -263,6 +431,22 @@ public sealed class TrayApplication : IDisposable
         _settingsWindow.Show();
         _settingsWindow.Activate();
         _ = _settingsWindow.RefreshBackendDataAsync();
+    }
+
+    private void ShowDiagnostics()
+    {
+        _diagnosticsWindow.Show();
+        _diagnosticsWindow.Activate();
+    }
+
+    private void ShowAbout()
+    {
+        if (_aboutWindow == null || !_aboutWindow.IsLoaded)
+        {
+            _aboutWindow = new AboutWindow(_backendClient);
+        }
+        _aboutWindow.Show();
+        _aboutWindow.Activate();
     }
 
     private void OnSettingsSaved(object? sender, AppSettings e)
@@ -297,6 +481,9 @@ public sealed class TrayApplication : IDisposable
 
         // Apply text observer polling interval
         _textObserver.SetPollingInterval(_settings.Timing.TextPollingIntervalMs);
+        
+        // Update tray menu visibility
+        _trayIconService.UpdateMenu(_settings.EnableDiagnostics);
 
         _editorWindow.ApplySettings(_settings);
         _settingsWindow.UpdateSettings(_settings);
@@ -325,6 +512,8 @@ public sealed class TrayApplication : IDisposable
         try
         {
             Logger.Log($"Replacement requested: '{args.Match.Context}' -> '{args.Replacement}'");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Replacing: {args.Match.Context} -> {args.Replacement}");
+            
             _textObserver.ReplaceText(args.Match.Offset, args.Match.Length, args.Replacement);
             Logger.Log("Replacement successful");
 
@@ -334,6 +523,7 @@ public sealed class TrayApplication : IDisposable
         catch (Exception ex)
         {
             Logger.Log($"Replacement failed: {ex.Message}");
+            if (_diagnosticsWindow.IsVisible) _diagnosticsWindow.AppendLog($"Replace failed: {ex.Message}");
         }
     }
 
@@ -346,5 +536,7 @@ public sealed class TrayApplication : IDisposable
         _textObserver.Dispose();
         _bubbleWindow.Close();
         _overlayWindow.Close();
+        _diagnosticsWindow.Close(); // Close dashboard
+        _aboutWindow?.Close();
     }
 }

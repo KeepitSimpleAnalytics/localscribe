@@ -122,6 +122,28 @@ public sealed class BackendClient : IDisposable
         return payload.Models;
     }
 
+    public async Task<HealthResponse> GetHealthAsync(
+        string? overrideBaseUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        string url = BuildUrl("/health", overrideBaseUrl);
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<HealthResponse>(url, cancellationToken);
+            return response ?? new HealthResponse { Status = "unknown", Version = "unknown" };
+        }
+        catch (Exception ex)
+        {
+            return new HealthResponse
+            {
+                Status = "offline",
+                Version = "unknown",
+                LanguageToolStatus = "unknown",
+                LanguageToolError = $"Backend unreachable: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<CheckResponse> CheckTextAsync(
         string text,
         LanguageToolSettings? languageToolConfig = null,
@@ -157,6 +179,43 @@ public sealed class BackendClient : IDisposable
 
         var result = await response.Content.ReadFromJsonAsync<CheckResponse>(cancellationToken: cancellationToken);
         return result ?? new CheckResponse();
+    }
+
+    public async Task<AnalysisResponse> AnalyzeTextAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        string url = BuildUrl("/v1/text/analyze");
+        var payload = new { text };
+
+        using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            // Analysis is optional/background, so maybe we shouldn't throw hard?
+            // But let's throw so the caller knows it failed.
+            string error = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException($"Analysis failed ({response.StatusCode}): {error}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<AnalysisResponse>(cancellationToken: cancellationToken);
+        return result ?? new AnalysisResponse();
+    }
+
+    /// <summary>
+    /// Sends a warmup request to load the model into Ollama memory.
+    /// Throws on failure so caller can log/handle appropriately.
+    /// </summary>
+    public async Task WarmupModelAsync(CancellationToken cancellationToken = default)
+    {
+        string url = BuildUrl("/runtime/warmup");
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromMinutes(10)); // Long timeout for model loading
+        using HttpResponseMessage response = await _httpClient.PostAsync(url, null, cts.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            string error = await response.Content.ReadAsStringAsync(cts.Token);
+            throw new InvalidOperationException($"Warmup failed ({response.StatusCode}): {error}");
+        }
     }
 
     public void Dispose() => _httpClient.Dispose();

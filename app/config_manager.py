@@ -66,6 +66,7 @@ class ConfigManager:
         ollama_base_url: str | None = None,
         grammar_model: str | None = None,
         general_model: str | None = None,
+        # analysis_model argument removed
     ) -> RuntimeConfig:
         with self._lock:
             updated = RuntimeConfig(
@@ -89,11 +90,20 @@ class ConfigManager:
 
     def get_model_config(self, key: str) -> ModelConfig:
         config = self.get_runtime_config()
-        model_name = config.grammar_model if key == "grammar" else config.general_model
+        
+        if key == "grammar" or key == "analysis": # Use grammar model for analysis
+            model_name = config.grammar_model
+            temperature = 0.1
+            max_tokens = 512
+            top_p = 0.95
+        else: # general
+            model_name = config.general_model
+            temperature = 0.5
+            max_tokens = 768
+            top_p = 0.9
+
         endpoint = f"{config.ollama_base_url}/api/chat"
-        temperature = 0.1 if key == "grammar" else 0.5
-        max_tokens = 512 if key == "grammar" else 768
-        top_p = 0.95 if key == "grammar" else 0.9
+        
         return ModelConfig(
             name=model_name,
             endpoint=endpoint,

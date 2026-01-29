@@ -15,6 +15,9 @@ class HealthResponse(BaseModel):
 
     status: str
     environment: str
+    version: str
+    language_tool_status: str = "unknown"
+    language_tool_error: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -126,9 +129,35 @@ class CheckResponse(BaseModel):
     """Response payload for grammar checking."""
 
     matches: list[GrammarError]
+    error: str | None = None
 
 
 class ModelListResponse(BaseModel):
     """List of available models reported by Ollama."""
 
     models: list[str]
+
+
+# --- Analysis Features ---
+
+class AnalysisRequest(BaseModel):
+    """Request payload for /v1/text/analyze."""
+    text: str = Field(..., min_length=1, description="Text to analyze.")
+
+
+class AnalysisIssue(BaseModel):
+    """Represents a semantic clarity issue found by the LLM."""
+    
+    offset: int
+    length: int
+    quoted_text: str
+    issue_type: Literal["complexity", "passive_voice", "wordiness", "jargon", "tone"]
+    suggestion: str
+    confidence: float = 1.0
+
+
+class AnalysisResponse(BaseModel):
+    """Response payload for text analysis."""
+    
+    issues: list[AnalysisIssue]
+    latency_ms: float

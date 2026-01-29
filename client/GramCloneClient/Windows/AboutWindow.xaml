@@ -1,0 +1,68 @@
+<Window x:Class="GramCloneClient.Windows.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About LocalScribe"
+        Width="360"
+        Height="280"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackground}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- App Name -->
+        <TextBlock Grid.Row="0"
+                   Text="LocalScribe"
+                   FontSize="28"
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource WindowForeground}"
+                   HorizontalAlignment="Center"/>
+
+        <!-- Version Info -->
+        <StackPanel Grid.Row="1" Margin="0,16,0,0" HorizontalAlignment="Center">
+            <TextBlock HorizontalAlignment="Center" Foreground="{DynamicResource WindowForeground}">
+                <Run Text="Client Version: "/>
+                <Run x:Name="ClientVersionText" Text="0.0.0" FontWeight="SemiBold"/>
+            </TextBlock>
+            <TextBlock HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="{DynamicResource WindowForeground}">
+                <Run Text="Backend Version: "/>
+                <Run x:Name="BackendVersionText" Text="Checking..." FontWeight="SemiBold"/>
+            </TextBlock>
+        </StackPanel>
+
+        <!-- Version Status -->
+        <Border x:Name="VersionStatusBorder"
+                Grid.Row="2"
+                Margin="0,16,0,0"
+                Padding="12,8"
+                CornerRadius="4"
+                Visibility="Collapsed"
+                HorizontalAlignment="Center">
+            <TextBlock x:Name="VersionStatusText"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"/>
+        </Border>
+
+        <!-- Description -->
+        <TextBlock Grid.Row="3"
+                   Text="AI-powered local grammar checking and text editing assistant."
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   Foreground="{DynamicResource SecondaryText}"
+                   Margin="0,16,0,0"
+                   VerticalAlignment="Top"/>
+
+        <!-- Close Button -->
+        <Button Grid.Row="4"
+                Content="Close"
+                Width="80"
+                HorizontalAlignment="Center"
+                Click="CloseButton_Click"/>
+    </Grid>
+</Window>
