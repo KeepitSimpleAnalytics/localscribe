@@ -1,42 +1,33 @@
+# Python
 __pycache__/
-.venv/
 *.pyc
-client/GramCloneClient/bin/
-client/GramCloneClient/obj/
-.vs/
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Environment & Config
+*.env
+*.env.*
 config/runtime_config.json
 tests/tmp_runtime_config.json
 
-# Claude Code
-.claude/
-
-# Python
-.mypy_cache/
-.pytest_cache/
-*.pyo
-*.pyd
+# Logs & Databases
+*.log
 *.db
 *.sqlite3
-*.log
-*.pot
-*.mo
-*.env
-*.env.*
-env/
-venv/
-build/
-dist/
-*.egg-info/
+backend.err
 
-# VS Code
-.vscode/
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Dotnet
+# C# / .NET
+client/GramCloneClient/bin/
+client/GramCloneClient/obj/
+.vs/
 *.user
 *.suo
 *.userosscache
@@ -50,60 +41,48 @@ Desktop.ini
 *.appxbundle
 *.msix
 *.msixbundle
-*.vspscc
-*.vssscc
-*.dbmdl
-*.bak
-*.backup
-*.log
-*.vsix
 *.nupkg
-*.snk
-*.psess
-*.vsp
-*.vsixmanifest
-*.testsettings
-*.vsmdi
-*.cachefile
-*.scc
-*.sdf
-*.ipch
-*.aps
-*.ncb
-*.opendb
-*.opensdf
-*.sbr
-*.tlh
-*.tli
-*.tmp
-*.tmp_proj
-*.log
-*.vspscc
-*.vssscc
-*.dbmdl
-*.bak
-*.backup
-*.log
 *.vsix
-*.nupkg
 *.snk
-*.psess
-*.vsp
-*.vsixmanifest
-*.testsettings
-*.vsmdi
-*.cachefile
-*.scc
-*.sdf
-*.ipch
-*.aps
-*.ncb
-*.opendb
-*.opensdf
-*.sbr
-*.tlh
-*.tli
-*.tmp
-*.tmp_proj
-*.log
 
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*~
+
+# Temp files
+*.tmp
+*.tmp_proj
+*.bak
+*.backup
+*.swp
+
+# One-time scripts (kept for reference but not needed)
+create_ls_icon.py
+create_taskbar_icons.py
+extract_icons.py
+extract_ls_feather.py
+resize_icon.py
+
+# Debug scripts
+debug_lt.py
+debug_startup.py
+verify_backend.py
+
+# Source images (generated icons are in final_icon/)
+Gemini_Generated_Image_*.png
+Screenshot*.jpg
+grammar_web_page.jpg
+ls_quil.png
+single_ls.png
+
+# Windows short filename artifacts
+*~*
