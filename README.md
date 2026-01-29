@@ -1,169 +1,186 @@
-# Local Scribe
+# LocalScribe
 
-A local AI writing assistant that mimics the functionality of premium grammar checkers using open-source tools.
-
-## Quick Start (Windows)
-
-1.  **Prerequisites:** 
-    *   Install **Python 3.11+** and ensure it's in your PATH.
-    *   Install **Java Runtime (JRE 8+)** (required for grammar checking).
-    *   Run `pip install -r requirements.txt` in this folder.
-2.  **Run:**
-    *   Open `client/GramCloneClient/bin/Debug/net8.0-windows10.0.19041.0/GramCloneClient.exe`.
-    *   The client will automatically start the Python backend in the background.
-    *   Look for the "G" icon in your system tray.
+A local AI writing assistant that provides real-time grammar checking, semantic clarity analysis, and text rewriting—all processed on your machine for complete privacy.
 
 ## Features
 
-*   **Real-Time Checking:** Monitors text focus and provides instant grammar feedback via a floating "bubble" and red underlines.
-*   **Semantic Clarity:** Analyzes text for complexity, passive voice, and wordiness using local LLMs, highlighting issues with yellow/blue/purple backgrounds.
-*   **Local Processing:** All text stays on your machine.
-*   **Rewriting:** Use the hotkey (default `Ctrl+Alt+G`) to open the full editor for rewriting (Professional, Casual, Academic modes).
-*   **Ollama Integration:** Uses local LLMs for advanced style improvements and analysis.
+- **Real-Time Grammar Checking** — LanguageTool-powered detection with red underlines on errors
+- **Semantic Clarity Analysis** — LLM-based detection of passive voice, wordiness, complexity, and jargon (yellow/blue/purple highlights)
+- **Multi-Mode Editing** — Proofread, rewrite, tone adjustment, and technical editing modes
+- **System Tray App** — Runs silently in the background with global hotkey support
+- **Local Processing** — All text stays on your machine; no cloud services required
 
-## Architecture
+## Quick Start (Windows)
 
-### Backend (Python/FastAPI)
-*   **Grammar:** `language-tool-python` (Java wrapper for LanguageTool).
-*   **Analysis:** Custom LLM Tool Use (Ollama) for semantic clarity checks.
-*   **Rewriting:** Ollama (via `langchain` or direct API).
-*   **API:** Exposes endpoints at `http://localhost:8000`.
-
-### Client (C# WPF)
-*   **UI Automation:** Uses Microsoft UI Automation to detect focused text fields.
-*   **Overlay:** Draws underlines (grammar) and highlights (clarity) directly on screen using a click-through transparent window.
-*   **Tray App:** Runs silently in the background.
-*   **Backend Manager:** Automatically launches and manages the Python backend process.
-
-## Development
-
-### Manual Startup (Optional)
-If you prefer to run components separately:
-1.  Start Backend: `python -m uvicorn app.main:app --reload`
-2.  Start Client: Open `GramCloneClient.sln` in Visual Studio or use `dotnet run`.
-
-
-## Editing Modes
-
-| Mode      | Behavior                                                                 |
-|-----------|---------------------------------------------------------------------------|
-| proofread | Minimal grammar/spelling/punctuation fixes, preserves tone/meaning.      |
-| rewrite   | Clarity-first rewrite, mild structural edits allowed.                    |
-| tone      | Tone transformations (`professional`, `concise`, `friendly`).            |
-| technical | Cybersecurity-focused rewrite keeping technical accuracy and precision.  |
-
-Prompts live in `app/prompts.py` for easy iteration.
-
-## Backend Setup
-
-Requirements: Python 3.11+, local model runtime (Ollama or vLLM).
+**Prerequisites:**
+- Python 3.11+
+- Java Runtime Environment (JRE 8+)
+- .NET 8 SDK
+- Ollama with models installed
 
 ```powershell
-cd X:\docker_images\gram_clone
-python -m venv .venv
-.venv\Scripts\activate
+# 1. Install Python dependencies
 pip install -r requirements.txt
+
+# 2. Pull Ollama models
+ollama pull llama3:instruct
+ollama pull qwen2:7b-instruct
+
+# 3. Start backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
 
-### Model server (Ollama example)
-
-```powershell
-ollama pull llama3:instruct             # proofread & analysis model
-ollama pull qwen2:7b-instruct           # rewrite/tone/technical model
-ollama serve
-```
-
-### Configuration
-
-- At startup, the backend creates `config/runtime_config.json` (ignored by git) with defaults:
-  ```json
-  {
-    "ollama_base_url": "http://10.8.14.169:11434",
-    "grammar_model": "llama3:instruct",
-    "general_model": "qwen2:7b-instruct",
-    "analysis_model": "llama3:instruct"
-  }
-  ```
-  - The Windows settings dialog reads/writes this file through the backend’s `/runtime/config` endpoint. Changing models or the Ollama base URL never requires editing environment variables.
-- Optional environment variables (via `.env`) control logging: `LOG_LEVEL`, `LOG_CONTENT_ENABLED`, etc.
-
-### API
-
-- `GET /health` → `{ "status": "ok", "environment": "development" }`
-- `POST /v1/text/edit` – main editing API.
-- `POST /v1/text/analyze` – semantic analysis API.
-- `GET /runtime/config` / `POST /runtime/config` – read and update Ollama base URL + model selection.
-- `GET /runtime/models` – proxies to Ollama’s `/api/tags` and returns available model names.
-
-Test editing quickly:
-
-```powershell
-curl -X POST http://localhost:8000/v1/text/edit ^
-  -H "Content-Type: application/json" ^
-  -d "{\"text\":\"Please fix this sentence.\",\"mode\":\"proofread\"}"
-```
-
-## Windows Tray Client
-
-Requirements: Windows 10/11, .NET 8 SDK (or Visual Studio 2022 with the .NET Desktop workload).
-
-```powershell
+# 4. Build and run client
 dotnet build client/GramCloneClient.sln
 dotnet run --project client/GramCloneClient/GramCloneClient.csproj
 ```
 
-### Features
+Look for the tray icon near the clock. Press `Ctrl+Alt+G` with text selected to open the editor.
 
-- Tray icon with “Settings…” and “Exit”.
-- Global hotkey `Ctrl+Alt+G` (configurable in Settings; stored under `%AppData%\GramClone\settings.json`).
-- Popup editor:
-  - Shows captured “Original” text and the “Improved” result.
-  - Mode dropdown (proofread, rewrite, tone, technical).
-  - Tone dropdown when mode=tone.
-  - Run button calls `/v1/text/edit`.
-  - Apply button copies the improved text and pastes it back into the source application.
-- Overlay & Error Checking:
-  - **Red Solid Lines:** Grammar errors found by LanguageTool.
-  - **Yellow/Blue Highlights:** Semantic issues (complexity, passive voice) found by LLM analysis.
-  - **Note:** If you see only *dotted* lines and no tooltip, these are likely from the application's native spellchecker, not LocalScribe. Ensure the LocalScribe backend is running and the "G" tray icon is visible.
-- Settings dialog:
-  - Backend URL (FastAPI base).
-  - Hotkey editor (`Ctrl+Alt+G`, `Win+Shift+H`, etc.).
-  - Default mode and tone.
-  - Overlay settings (Enable/Disable, Style, Colors, Opacity).
-  - Ollama base URL (set to wherever Ollama listens). Use **Reload Models** to push the URL to the backend and fetch the model list from that host.
-  - Proofread model + Rewrite/Tone/Technical model dropdowns (editable) populated via `GET /runtime/models` once the Ollama URL is reachable.
-  - Saving updates both the local client settings and the backend runtime configuration.
+## Architecture
 
-### Usage Flow
-
-1. Start the backend (`uvicorn app.main:app ...`) and ensure Ollama is running.
-2. Launch the tray client (icon appears near the clock; look under the `^` caret if hidden).
-3. Configure backend URL / hotkey / models via Settings (the dialog queries the backend to list available Ollama models).
-4. Highlight text in any Windows application and press the hotkey (defaults to `Ctrl+Alt+G`).
-5. Use the popup editor to select mode/tone, then click **Run**.
-6. Review the improved text and click **Apply** to paste it back into the original application.
-
-## Logging & Privacy
-
-- Backend logs include timestamp, mode, model, latency, and text length only. Set `LOG_CONTENT_ENABLED=true` (optional) to include a short preview for debugging.
-- Tray client clipboard swaps are local and the previous clipboard contents are restored after Apply.
-- No cloud endpoints are used unless you explicitly change the backend or Ollama URLs.
-
-## Testing & Validation
-
-```powershell
-pytest                           # backend tests (includes config/model endpoints)
-python scripts/sanity_check.py   # sample backend calls
-# Manual client test:
-#   1. Run backend + Ollama.
-#   2. Run tray app, set backend URL/models in Settings.
-#   3. Highlight text, press the hotkey, Run proofread, Apply.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Windows Tray Client                       │
+│                      (C# WPF / .NET 8)                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Tray Icon   │  │ Overlay     │  │ Editor Window       │  │
+│  │ & Settings  │  │ (Underlines)│  │ (Proofread/Rewrite) │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└────────────────────────────┬────────────────────────────────┘
+                             │ HTTP
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Backend (FastAPI)                         │
+│                       Port 8000                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Grammar     │  │ Analysis    │  │ Editing             │  │
+│  │ (LangTool)  │  │ (LLM)       │  │ (LLM)               │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                             ▼
+     ┌─────────────────┐          ┌─────────────────┐
+     │  LanguageTool   │          │     Ollama      │
+     │  (Java)         │          │  (Local LLMs)   │
+     └─────────────────┘          └─────────────────┘
 ```
 
-## Deployment Notes
+## Editing Modes
 
-- Backend: run `uvicorn app.main:app --host 0.0.0.0 --port 8000`. Use NSSM/Task Scheduler/Systemd as desired.
-- Runtime config lives in `config/runtime_config.json`; the tray app manages it, but you can edit manually if needed.
-- Tray client: publish with `dotnet publish -c Release -r win10-x64` for a self-contained executable. Place a shortcut to the `.exe` in `%AppData%\Microsoft\Windows\Start Menu\Programs\Startup` for auto-start.
+| Mode | Description |
+|------|-------------|
+| `proofread` | Minimal grammar/spelling fixes, preserves tone and meaning |
+| `rewrite` | Clarity-first rewrite with mild structural edits |
+| `tone` | Tone transformation (professional, concise, friendly) |
+| `technical` | Cybersecurity-focused rewrite maintaining technical accuracy |
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check with LanguageTool status |
+| `POST` | `/v1/text/check` | Grammar checking |
+| `POST` | `/v1/text/analyze` | Semantic clarity analysis |
+| `POST` | `/v1/text/edit` | Multi-mode text editing |
+| `GET` | `/runtime/config` | Read runtime configuration |
+| `POST` | `/runtime/config` | Update Ollama URL and models |
+| `GET` | `/runtime/models` | List available Ollama models |
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/v1/text/edit \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Please fix this sentence.","mode":"proofread"}'
+```
+
+## Configuration
+
+### Runtime Config (`config/runtime_config.json`)
+
+Generated on first run. Managed via Settings dialog or API.
+
+```json
+{
+  "ollama_base_url": "http://localhost:11434",
+  "grammar_model": "llama3:instruct",
+  "general_model": "qwen2:7b-instruct"
+}
+```
+
+### Environment Variables (`.env`)
+
+```bash
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+LOG_CONTENT_ENABLED=false
+REQUEST_TIMEOUT_SECONDS=600.0
+```
+
+### Client Settings
+
+Stored at `%AppData%\GramClone\settings.json`:
+- Backend URL
+- Global hotkey (default: `Ctrl+Alt+G`)
+- Default mode and tone
+- Overlay customization
+
+## Visual Feedback
+
+The overlay draws directly on screen:
+- **Red underlines** — Grammar errors (LanguageTool)
+- **Yellow highlights** — Wordiness/redundancy
+- **Blue highlights** — Passive voice
+- **Purple highlights** — Complexity issues
+
+Hover over highlighted text for suggestions.
+
+## Development
+
+### Backend
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Client
+```powershell
+cd client/GramCloneClient
+dotnet build
+dotnet run
+```
+
+### Testing
+```powershell
+pytest                          # Backend tests
+python scripts/sanity_check.py  # Sample API calls
+```
+
+## Deployment
+
+**Backend:**
+```powershell
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+Use Task Scheduler, NSSM, or systemd to run as a service.
+
+**Client:**
+```powershell
+dotnet publish -c Release -r win10-x64
+```
+Add shortcut to `%AppData%\Microsoft\Windows\Start Menu\Programs\Startup` for auto-start.
+
+## Privacy
+
+- All processing happens locally
+- No cloud endpoints unless explicitly configured
+- Logs contain timestamps and text length only (no content by default)
+- Clipboard contents restored after paste operations
+
+## Tech Stack
+
+**Backend:** Python 3.11+, FastAPI, LanguageTool, Ollama
+**Client:** C# / .NET 8, WPF, Windows UI Automation
+**Models:** llama3:instruct (proofread), qwen2:7b-instruct (rewrite)
